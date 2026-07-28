@@ -2,39 +2,40 @@
 
 A lightweight English-learning browser extension.
 
-## Milestone 5: local pronunciation settings
+## Milestone 6: favorites import and export
 
-This milestone adds one small local preference to the tested translation, favorites, and pronunciation flow:
+This milestone adds portable local backups to the tested translation, favorites, pronunciation, and settings flow:
 
-- choose US English (`en-US`) or UK English (`en-GB`) pronunciation
-- save the preference in local browser storage
-- apply the preference to words, sentences, and paragraphs
-- default safely to US English when upgrading from an older version
-- keep Chrome local translation as the default
-- keep Azure as an optional fallback only
-- keep all translation, favorites, and pronunciation behavior from previous milestones
+- export all current word and sentence favorites to a readable JSON file
+- import a Translator JSON backup from the favorites window
+- merge imported entries with existing local favorites
+- keep the existing local entry when the same word or sentence already exists
+- validate the whole file before changing local favorites
+- report invalid or unsupported files without overwriting current data
+- show import and export results in the existing diagnostic area
+- automatically close the settings window shortly after a successful save
 
-No account, API key, or paid speech service is required. The actual voice depends on the English voices installed in Chrome and the operating system.
+The exported file contains only favorite entries. It does not contain settings, browsing history, screenshots, API keys, or audio.
 
 ## Test build
 
-1. Open the latest successful **CI** run for the M05 pull request.
-2. Download the artifact named `translator-m05-<commit-sha>`.
-3. Extract the ZIP and load the directory from `chrome://extensions` using **Load unpacked**.
-4. Open the extension's **Options** page from `chrome://extensions` → Translator → **Details** → **Extension options**.
-5. Choose **UK English**, click **Save settings**, and confirm the saved message.
-6. Return to the Translator side panel, select English text, and play its pronunciation.
-7. Reopen the options page and confirm UK English is still selected.
-8. Change back to **US English**, save, and play the same text again.
-9. Confirm translation, heart favorites, and the hidden favorites view still work.
+1. Open the latest successful **CI** run for the M06 pull request.
+2. Download `translator-m06-<commit-sha>`, extract it, and load it from `chrome://extensions`.
+3. Open Translator favorites and confirm **Export JSON** and **Import JSON** appear above the lists.
+4. Save at least one word and one sentence, then click **Export JSON**.
+5. Confirm a file named like `translator-favorites-2026-07-28.json` downloads.
+6. Remove one exported favorite, then import the downloaded JSON file.
+7. Confirm the removed favorite returns and existing favorites are not duplicated.
+8. Try importing an unrelated or damaged JSON file and confirm existing favorites remain unchanged while an error is shown.
+9. Open extension options, change pronunciation, save, and confirm the settings window closes automatically.
+10. Confirm translation, pronunciation, heart favorites, and hidden favorites still work.
 
 ## Privacy
 
-The pronunciation preference and favorites remain in local browser storage. Speech synthesis runs through the browser or operating system. No audio, favorites, browsing history, or screenshots are uploaded.
+Favorites and preferences remain in local browser storage. Import and export use a file chosen or downloaded by the user. Nothing is uploaded by this feature.
 
 ## Deferred
 
-- favorite import/export
 - translation-count statistics
 - screenshot OCR
 
