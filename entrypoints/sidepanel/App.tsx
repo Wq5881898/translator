@@ -50,6 +50,7 @@ export function App() {
   const [latest, setLatest] = useState<SelectionTranslation | null>(null);
   const [status, setStatus] = useState('Select English text on a webpage');
   const [foundationResult, setFoundationResult] = useState<string>();
+  const [outputIsError, setOutputIsError] = useState(false);
   const requestId = useRef(0);
 
   async function performTranslation(selectionState: SelectionTranslation) {
@@ -60,6 +61,8 @@ export function App() {
       error: null,
     };
 
+    setFoundationResult(undefined);
+    setOutputIsError(false);
     setLatest(pending);
     setStatus('Preparing local translation…');
 
@@ -85,6 +88,8 @@ export function App() {
         error instanceof Error ? error.message : 'Chrome local translation failed.';
       setLatest({ ...pending, error: message });
       setStatus(message);
+      setFoundationResult(`Translation error: ${message}`);
+      setOutputIsError(true);
     }
   }
 
@@ -96,6 +101,8 @@ export function App() {
       }
 
       if (selection.translation) {
+        setFoundationResult(undefined);
+        setOutputIsError(false);
         setLatest(selection);
         setStatus('Translation ready');
         return;
@@ -135,6 +142,7 @@ export function App() {
   async function runFoundationCheck() {
     setStatus('Checking local translation…');
     setFoundationResult(undefined);
+    setOutputIsError(false);
 
     try {
       const result = await chromeTranslationProvider.translate({
@@ -145,9 +153,11 @@ export function App() {
       setFoundationResult(result.translatedText);
       setStatus('Local translation is working');
     } catch (error) {
-      setStatus(
-        error instanceof Error ? error.message : 'Local translation check failed',
-      );
+      const message =
+        error instanceof Error ? error.message : 'Local translation check failed';
+      setStatus(message);
+      setFoundationResult(`Local translation check failed: ${message}`);
+      setOutputIsError(true);
     }
   }
 
@@ -231,7 +241,11 @@ export function App() {
       <button className="secondary" type="button" onClick={runFoundationCheck}>
         Run local translation check
       </button>
-      {foundationResult ? <output lang="zh-CN">{foundationResult}</output> : null}
+      {foundationResult ? (
+        <output className={outputIsError ? 'error' : undefined} aria-live="polite">
+          {foundationResult}
+        </output>
+      ) : null}
     </main>
   );
 }
