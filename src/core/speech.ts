@@ -50,8 +50,12 @@ export function createSpeechPlayer(
   }
 
   function stop() {
-    const { synthesis } = dependencies();
-    synthesis.cancel();
+    try {
+      const { synthesis } = dependencies();
+      synthesis.cancel();
+    } catch {
+      // Stopping is safe even when speech synthesis is unavailable.
+    }
     finishCurrent?.();
     finishCurrent = undefined;
   }
