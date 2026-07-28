@@ -165,3 +165,153 @@ output {
   font-size: 24px;
   font-weight: 700;
 }
+
+
+.favorites {
+  display: grid;
+  gap: 16px;
+  border: 1px solid #dce5dd;
+  border-radius: 12px;
+  padding: 16px;
+  background: white;
+}
+
+.section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.section-heading h2,
+.favorite-group h3 {
+  margin: 0;
+}
+
+.section-heading h2 {
+  font-size: 20px;
+}
+
+.section-heading span,
+.favorite-group h3,
+.muted,
+time {
+  color: #607066;
+  font-size: 12px;
+}
+
+.favorite-group {
+  display: grid;
+  gap: 8px;
+}
+
+.favorite-group ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.favorite-group li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  border-top: 1px solid #e7ede8;
+  padding-top: 12px;
+}
+
+.favorite-group li > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.favorite-group li strong,
+.favorite-group li span {
+  overflow-wrap: anywhere;
+}
+
+.favorite-group .phonetic {
+  font-size: 12px;
+}
+
+.muted {
+  margin: 0;
+}
+
+.remove-button {
+  width: auto;
+  align-self: start;
+  padding: 6px 8px;
+  color: #8b3428;
+  border: 1px solid #e7c3bd;
+  background: transparent;
+  font-size: 12px;
+}
+
+.remove-button:hover {
+  color: white;
+  background: #8b3428;
+}
+
+
+.favorites-trigger {
+  width: auto;
+  justify-self: start;
+}
+
+.heart-button {
+  width: 48px;
+  justify-self: end;
+  padding: 2px;
+  color: #c63f42;
+  background: transparent;
+  font-family: Arial, sans-serif;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.heart-button:hover {
+  color: #a9252a;
+  background: #fff0f0;
+}
+
+.heart-button.saved {
+  color: #d5282f;
+}
+
+.favorites-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  overflow-y: auto;
+  background: #f6f8f4;
+}
+
+.favorites-overlay .favorites {
+  min-height: 100%;
+  border: 0;
+  border-radius: 0;
+  padding: 24px 18px;
+}
+
+.section-heading > div {
+  display: grid;
+  gap: 4px;
+}
+
+.close-button {
+  width: 40px;
+  align-self: start;
+  padding: 4px;
+  color: #47564c;
+  background: transparent;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.close-button:hover {
+  color: #17231c;
+  background: #e7ede8;
+}
