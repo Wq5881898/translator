@@ -86,6 +86,11 @@ h1 {
   line-height: 1.55;
 }
 
+.phonetic {
+  color: #607066;
+  font-family: ui-monospace, monospace;
+}
+
 .result {
   border-top: 1px solid #e7ede8;
   padding-top: 16px;
@@ -95,6 +100,23 @@ h1 {
   color: #246b45;
   font-size: 18px;
   font-weight: 700;
+}
+
+.error {
+  color: #a03b2c;
+}
+
+.link-button {
+  width: max-content;
+  padding: 0;
+  color: #246b45;
+  background: transparent;
+  text-decoration: underline;
+}
+
+.link-button:hover {
+  color: #1c5637;
+  background: transparent;
 }
 
 .empty-state {

@@ -10,29 +10,7 @@ import { mockTranslationProvider } from '../src/providers/mock-translation-provi
 
 const LATEST_TRANSLATION_KEY = 'latestSelectionTranslation';
 
-async function translateSelection(
-  message: CaptureSelectionMessage,
-): Promise<SelectionTranslation> {
-  const text = normalizeSelection(message.payload.text);
-
-  if (!text) {
-    throw new Error('Select some English text first.');
-  }
-
-  const translation = await mockTranslationProvider.translate({
-    text,
-    sourceLanguage: 'en',
-    targetLanguage: 'zh-CN',
-  });
-
-  const state: SelectionTranslation = {
-    selection: {
-      ...message.payload,
-      text,
-    },
-    translation,
-  };
-
+async function publishState(state: SelectionTranslation): Promise<void> {
   await browser.storage.session.set({
     [LATEST_TRANSLATION_KEY]: state,
   });
@@ -41,8 +19,24 @@ async function translateSelection(
     type: 'TRANSLATION_UPDATED',
     payload: state,
   };
-  await browser.runtime.sendMessage(update);
 
+  await browser.runtime.sendMessage(update).catch(() => undefined);
+}
+
+async function captureSelection(
+  message: CaptureSelectionMessage,
+): Promise<SelectionTranslation> {
+  const text = normalizeSelection(message.payload.text);
+  const state: SelectionTranslation = {
+    selection: {
+      ...message.payload,
+      text,
+    },
+    translation: null,
+    error: text ? null : 'Select some English text first.',
+  };
+
+  await publishState(state);
   return state;
 }
 
@@ -67,7 +61,7 @@ export default defineBackground(() => {
     const text = normalizeSelection(info.selectionText ?? '');
 
     if (text) {
-      void translateSelection({
+      void captureSelection({
         type: 'CAPTURE_SELECTION',
         payload: {
           text,
@@ -84,7 +78,7 @@ export default defineBackground(() => {
   });
 
   browser.runtime.onMessage.addListener(
-    async (message: unknown): Promise<ExtensionResponse> => {
+    async (message: unknown, sender): Promise<ExtensionResponse> => {
       if (!isExtensionMessage(message)) {
         return { ok: false, error: 'Unsupported message.' };
       }
@@ -99,12 +93,19 @@ export default defineBackground(() => {
         return { ok: true, data: data ?? null };
       }
 
-      try {
-        if (message.type === 'CAPTURE_SELECTION') {
-          const data = await translateSelection(message);
-          return { ok: true, data };
+      if (message.type === 'CAPTURE_SELECTION') {
+        const data = await captureSelection(message);
+
+        if (sender.tab?.windowId !== undefined) {
+          await browser.sidePanel
+            .open({ windowId: sender.tab.windowId })
+            .catch(() => undefined);
         }
 
+        return { ok: true, data };
+      }
+
+      try {
         const data = await mockTranslationProvider.translate(message.payload);
         return { ok: true, data };
       } catch (error) {

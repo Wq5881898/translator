@@ -9,7 +9,8 @@ export type SelectionContext = {
 
 export type SelectionTranslation = {
   selection: SelectionContext;
-  translation: TranslationResult;
+  translation: TranslationResult | null;
+  error: string | null;
 };
 
 export type CaptureSelectionMessage = {
