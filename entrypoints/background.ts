@@ -78,7 +78,7 @@ export default defineBackground(() => {
   });
 
   browser.runtime.onMessage.addListener(
-    async (message: unknown): Promise<ExtensionResponse> => {
+    async (message: unknown, sender): Promise<ExtensionResponse> => {
       if (!isExtensionMessage(message)) {
         return { ok: false, error: 'Unsupported message.' };
       }
@@ -94,7 +94,15 @@ export default defineBackground(() => {
       }
 
       if (message.type === 'CAPTURE_SELECTION') {
-        return { ok: true, data: await captureSelection(message) };
+        const data = await captureSelection(message);
+
+        if (sender.tab?.windowId !== undefined) {
+          await browser.sidePanel
+            .open({ windowId: sender.tab.windowId })
+            .catch(() => undefined);
+        }
+
+        return { ok: true, data };
       }
 
       try {
