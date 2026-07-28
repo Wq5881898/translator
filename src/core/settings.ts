@@ -1,12 +1,14 @@
 export const TRANSLATOR_SETTINGS_KEY = 'translatorSettings';
 
 export type TranslatorSettings = {
+  azureFallbackEnabled: boolean;
   azureKey: string;
   azureRegion: string;
 };
 
 export function normalizeSettings(settings: TranslatorSettings): TranslatorSettings {
   return {
+    azureFallbackEnabled: settings.azureFallbackEnabled === true,
     azureKey: settings.azureKey.trim(),
     azureRegion: settings.azureRegion.trim().toLowerCase(),
   };
