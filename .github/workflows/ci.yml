@@ -35,7 +35,7 @@ jobs:
       - name: Upload test extension
         uses: actions/upload-artifact@v4
         with:
-          name: translator-m03-${{ github.sha }}
+          name: translator-m04-${{ github.sha }}
           path: .output/chrome-mv3/
           include-hidden-files: true
           if-no-files-found: error
