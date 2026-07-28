@@ -254,3 +254,64 @@ time {
   color: white;
   background: #8b3428;
 }
+
+
+.favorites-trigger {
+  width: auto;
+  justify-self: start;
+}
+
+.heart-button {
+  width: 48px;
+  justify-self: end;
+  padding: 2px;
+  color: #c63f42;
+  background: transparent;
+  font-family: Arial, sans-serif;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.heart-button:hover {
+  color: #a9252a;
+  background: #fff0f0;
+}
+
+.heart-button.saved {
+  color: #d5282f;
+}
+
+.favorites-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  overflow-y: auto;
+  background: #f6f8f4;
+}
+
+.favorites-overlay .favorites {
+  min-height: 100%;
+  border: 0;
+  border-radius: 0;
+  padding: 24px 18px;
+}
+
+.section-heading > div {
+  display: grid;
+  gap: 4px;
+}
+
+.close-button {
+  width: 40px;
+  align-self: start;
+  padding: 4px;
+  color: #47564c;
+  background: transparent;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.close-button:hover {
+  color: #17231c;
+  background: #e7ede8;
+}
