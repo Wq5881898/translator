@@ -8,6 +8,7 @@ import {
 import { fetchEnglishPhonetic } from './free-dictionary-provider';
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+type AzureSettings = Pick<TranslatorSettings, 'azureKey' | 'azureRegion'>;
 
 type TranslateResponse = Array<{
   translations?: Array<{
@@ -23,7 +24,7 @@ type DictionaryResponse = Array<{
 
 const AZURE_ENDPOINT = 'https://api.cognitive.microsofttranslator.com';
 
-function headers(settings: TranslatorSettings): HeadersInit {
+function headers(settings: AzureSettings): HeadersInit {
   return {
     'Content-Type': 'application/json; charset=UTF-8',
     'Ocp-Apim-Subscription-Key': settings.azureKey,
@@ -34,7 +35,7 @@ function headers(settings: TranslatorSettings): HeadersInit {
 async function azureRequest<T>(
   path: string,
   text: string,
-  settings: TranslatorSettings,
+  settings: AzureSettings,
   fetcher: FetchLike,
 ): Promise<T> {
   const response = await fetcher(`${AZURE_ENDPOINT}${path}`, {
@@ -64,7 +65,7 @@ async function azureRequest<T>(
 
 async function translateText(
   text: string,
-  settings: TranslatorSettings,
+  settings: AzureSettings,
   fetcher: FetchLike,
 ): Promise<string> {
   const response = await azureRequest<TranslateResponse>(
@@ -84,7 +85,7 @@ async function translateText(
 
 async function lookupWord(
   word: string,
-  settings: TranslatorSettings,
+  settings: AzureSettings,
   fetcher: FetchLike,
 ): Promise<string[]> {
   const response = await azureRequest<DictionaryResponse>(
@@ -101,7 +102,7 @@ async function lookupWord(
 }
 
 export function createAzureTranslationProvider(
-  settings: TranslatorSettings,
+  settings: AzureSettings,
   fetcher: FetchLike = fetch,
 ): TranslationProvider {
   return {
