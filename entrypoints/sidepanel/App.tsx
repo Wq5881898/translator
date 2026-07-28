@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { FavoritesTransferControls } from './FavoritesTransferControls';
+
 
 import {
   addFavorite,
@@ -391,7 +393,17 @@ export function App() {
                 onClick={() => setShowFavorites(false)}
               >
                 ×
-              </button>
+                      <FavoritesTransferControls
+          favorites={favorites}
+          onImport={persistFavorites}
+          onStatus={(message, isError = false) => {
+            setStatus(message);
+            setFoundationResult(message);
+            setOutputIsError(isError);
+          }}
+        />
+
+</button>
             </div>
 
         <div className="favorite-group">
