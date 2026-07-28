@@ -61,6 +61,7 @@ function formatFavoriteTime(value: string): string {
 export function App() {
   const [latest, setLatest] = useState<SelectionTranslation | null>(null);
   const [favorites, setFavorites] = useState<FavoriteEntry[]>([]);
+  const [showFavorites, setShowFavorites] = useState(false);
   const [status, setStatus] = useState('Select English text on a webpage');
   const [foundationResult, setFoundationResult] = useState<string>();
   const [outputIsError, setOutputIsError] = useState(false);
@@ -234,6 +235,13 @@ export function App() {
       <p className="intro">
         Translate locally, then keep useful words and sentences in this browser.
       </p>
+      <button
+        className="secondary favorites-trigger"
+        type="button"
+        onClick={() => setShowFavorites(true)}
+      >
+        Open favorites ({favorites.length})
+      </button>
 
       <section className="card status-card" aria-live="polite">
         <span className="label">Status</span>
@@ -271,8 +279,14 @@ export function App() {
             <span className="label">Chinese translation</span>
             <p lang="zh-CN">{latest.translation.translatedText}</p>
           </div>
-          <button type="button" onClick={() => void toggleCurrentFavorite()}>
-            {currentFavorite ? 'Remove from favorites' : 'Save to favorites'}
+          <button
+            className={`heart-button${currentFavorite ? ' saved' : ''}`}
+            type="button"
+            aria-label={currentFavorite ? 'Remove from favorites' : 'Save to favorites'}
+            title={currentFavorite ? 'Saved to favorites' : 'Save to favorites'}
+            onClick={() => void toggleCurrentFavorite()}
+          >
+            <span aria-hidden="true">{currentFavorite ? '♥' : '♡'}</span>
           </button>
           <dl>
             <div>
@@ -306,11 +320,23 @@ export function App() {
         </section>
       )}
 
-      <section className="favorites" aria-labelledby="favorites-heading">
-        <div className="section-heading">
-          <h2 id="favorites-heading">Favorites</h2>
-          <span>{favorites.length} saved locally</span>
-        </div>
+      {showFavorites ? (
+        <div className="favorites-overlay" role="dialog" aria-modal="true" aria-labelledby="favorites-heading">
+          <section className="favorites">
+            <div className="section-heading">
+              <div>
+                <h2 id="favorites-heading">Favorites</h2>
+                <span>{favorites.length} saved locally</span>
+              </div>
+              <button
+                className="close-button"
+                type="button"
+                aria-label="Close favorites"
+                onClick={() => setShowFavorites(false)}
+              >
+                ×
+              </button>
+            </div>
 
         <div className="favorite-group">
           <h3>Words ({wordFavorites.length})</h3>
@@ -372,7 +398,9 @@ export function App() {
             <p className="muted">No saved sentences yet.</p>
           )}
         </div>
-      </section>
+          </section>
+        </div>
+      ) : null}
 
       <button className="secondary" type="button" onClick={runFoundationCheck}>
         Run local translation check
