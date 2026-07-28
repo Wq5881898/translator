@@ -3,8 +3,8 @@ import { type ChangeEvent, useRef, useState } from 'react';
 import type { FavoriteEntry } from '../../src/core/favorites';
 import {
   mergeFavorites,
-  parseFavoritesExport,
-  serializeFavorites,
+  parseFavoritesCsv,
+  serializeFavoritesCsv,
 } from '../../src/core/favorites-transfer';
 
 type Props = {
@@ -18,17 +18,17 @@ export function FavoritesTransferControls({ favorites, onImport, onStatus }: Pro
   const [busy, setBusy] = useState(false);
 
   function exportFavorites() {
-    const blob = new Blob([serializeFavorites(favorites)], {
-      type: 'application/json',
+    const blob = new Blob([serializeFavoritesCsv(favorites)], {
+      type: 'text/csv;charset=utf-8',
     });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     const date = new Date().toISOString().slice(0, 10);
     link.href = url;
-    link.download = `translator-favorites-${date}.json`;
+    link.download = `translator-favorites-${date}.csv`;
     link.click();
     URL.revokeObjectURL(url);
-    onStatus(`Exported ${favorites.length} favorites`);
+    onStatus(`Exported ${favorites.length} favorites to CSV`);
   }
 
   async function importFavorites(event: ChangeEvent<HTMLInputElement>) {
@@ -40,13 +40,13 @@ export function FavoritesTransferControls({ favorites, onImport, onStatus }: Pro
 
     setBusy(true);
     try {
-      const imported = parseFavoritesExport(await file.text());
+      const imported = parseFavoritesCsv(await file.text());
       const merged = mergeFavorites(favorites, imported);
       const added = merged.length - favorites.length;
       await onImport(merged);
       onStatus(
         added > 0
-          ? `Imported ${added} new favorites`
+          ? `Imported ${added} new favorites from CSV`
           : 'Import complete; no new favorites found',
       );
     } catch (error) {
@@ -67,7 +67,7 @@ export function FavoritesTransferControls({ favorites, onImport, onStatus }: Pro
         disabled={busy}
         onClick={exportFavorites}
       >
-        Export JSON
+        Export CSV
       </button>
       <button
         className="secondary"
@@ -75,13 +75,13 @@ export function FavoritesTransferControls({ favorites, onImport, onStatus }: Pro
         disabled={busy}
         onClick={() => inputRef.current?.click()}
       >
-        {busy ? 'Importing…' : 'Import JSON'}
+        {busy ? 'Importing…' : 'Import CSV'}
       </button>
       <input
         ref={inputRef}
         className="visually-hidden"
         type="file"
-        accept="application/json,.json"
+        accept="text/csv,.csv"
         onChange={(event) => void importFavorites(event)}
       />
     </div>
