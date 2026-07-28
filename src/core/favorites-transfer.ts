@@ -100,7 +100,13 @@ export function parseFavoritesCsv(text: string): FavoriteEntry[] {
       throw new Error('A CSV row has the wrong number of columns.');
     }
 
-    const [rawKind, rawEnglish, rawPhonetic, rawChinese, rawDate] = row;
+    const [
+      rawKind = '',
+      rawEnglish = '',
+      rawPhonetic = '',
+      rawChinese = '',
+      rawDate = '',
+    ] = row;
     const kind = rawKind.trim();
     const originalText = rawEnglish.trim();
     const translatedText = rawChinese.trim();
