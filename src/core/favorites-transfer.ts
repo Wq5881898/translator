@@ -1,96 +1,132 @@
 import type { FavoriteEntry, FavoriteKind } from './favorites';
 
-const EXPORT_FORMAT = 'translator-favorites';
-const EXPORT_VERSION = 1;
-
-export type FavoritesExport = {
-  format: typeof EXPORT_FORMAT;
-  version: typeof EXPORT_VERSION;
-  exportedAt: string;
-  favorites: FavoriteEntry[];
-};
+const CSV_HEADERS = [
+  'Type',
+  'English',
+  'Phonetic',
+  'Chinese translation',
+  'First saved',
+] as const;
 
 function normalizedId(text: string, kind: FavoriteKind): string {
   const normalized = text.replace(/\s+/gu, ' ').trim();
   return `${kind}:${kind === 'word' ? normalized.toLocaleLowerCase('en') : normalized}`;
 }
 
-function parseFavorite(value: unknown): FavoriteEntry {
-  if (!value || typeof value !== 'object') {
-    throw new Error('The file contains an invalid favorite.');
-  }
-
-  const item = value as Record<string, unknown>;
-  const kind = item.kind;
-  const originalText = typeof item.originalText === 'string' ? item.originalText.trim() : '';
-  const translatedText =
-    typeof item.translatedText === 'string' ? item.translatedText.trim() : '';
-  const firstFavoritedAt =
-    typeof item.firstFavoritedAt === 'string' ? item.firstFavoritedAt : '';
-
-  if (
-    (kind !== 'word' && kind !== 'sentence') ||
-    !originalText ||
-    !translatedText ||
-    !firstFavoritedAt ||
-    Number.isNaN(Date.parse(firstFavoritedAt))
-  ) {
-    throw new Error('The file contains an invalid favorite.');
-  }
-
-  const phonetic = typeof item.phonetic === 'string' ? item.phonetic.trim() : '';
-
-  return {
-    id: normalizedId(originalText, kind),
-    kind,
-    originalText,
-    translatedText,
-    firstFavoritedAt,
-    ...(phonetic ? { phonetic } : {}),
-  };
+function csvCell(value: string): string {
+  return /[",\r\n]/u.test(value) ? `"${value.replace(/"/gu, '""')}"` : value;
 }
 
-export function serializeFavorites(
-  favorites: FavoriteEntry[],
-  exportedAt = new Date().toISOString(),
-): string {
-  const payload: FavoritesExport = {
-    format: EXPORT_FORMAT,
-    version: EXPORT_VERSION,
-    exportedAt,
-    favorites,
-  };
+function parseCsvRows(text: string): string[][] {
+  const source = text.replace(/^\uFEFF/u, '');
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let value = '';
+  let quoted = false;
 
-  return JSON.stringify(payload, null, 2);
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+
+    if (quoted) {
+      if (character === '"' && source[index + 1] === '"') {
+        value += '"';
+        index += 1;
+      } else if (character === '"') {
+        quoted = false;
+      } else {
+        value += character;
+      }
+      continue;
+    }
+
+    if (character === '"' && value === '') {
+      quoted = true;
+    } else if (character === ',') {
+      row.push(value);
+      value = '';
+    } else if (character === '\n') {
+      row.push(value.replace(/\r$/u, ''));
+      rows.push(row);
+      row = [];
+      value = '';
+    } else {
+      value += character;
+    }
+  }
+
+  if (quoted) {
+    throw new Error('The CSV file contains an unfinished quoted value.');
+  }
+
+  if (value || row.length) {
+    row.push(value.replace(/\r$/u, ''));
+    rows.push(row);
+  }
+
+  return rows.filter((item) => item.some((cell) => cell.trim()));
 }
 
-export function parseFavoritesExport(text: string): FavoriteEntry[] {
-  let value: unknown;
+export function serializeFavoritesCsv(favorites: FavoriteEntry[]): string {
+  const rows = favorites.map((favorite) => [
+    favorite.kind,
+    favorite.originalText,
+    favorite.phonetic ?? '',
+    favorite.translatedText,
+    favorite.firstFavoritedAt,
+  ]);
 
-  try {
-    value = JSON.parse(text);
-  } catch {
-    throw new Error('Choose a valid Translator favorites JSON file.');
+  return `\uFEFF${[CSV_HEADERS, ...rows]
+    .map((row) => row.map((cell) => csvCell(cell)).join(','))
+    .join('\r\n')}\r\n`;
+}
+
+export function parseFavoritesCsv(text: string): FavoriteEntry[] {
+  const rows = parseCsvRows(text);
+  const headers = rows.shift();
+
+  if (!headers || headers.length !== CSV_HEADERS.length) {
+    throw new Error('Choose a valid Translator favorites CSV file.');
   }
 
-  if (!value || typeof value !== 'object') {
-    throw new Error('Choose a valid Translator favorites JSON file.');
-  }
-
-  const payload = value as Record<string, unknown>;
-  if (
-    payload.format !== EXPORT_FORMAT ||
-    payload.version !== EXPORT_VERSION ||
-    !Array.isArray(payload.favorites)
-  ) {
-    throw new Error('This file is not a supported Translator favorites export.');
+  const normalizedHeaders = headers.map((header) => header.trim());
+  if (!CSV_HEADERS.every((header, index) => normalizedHeaders[index] === header)) {
+    throw new Error('This CSV does not have the expected Translator columns.');
   }
 
   const unique = new Map<string, FavoriteEntry>();
-  for (const value of payload.favorites) {
-    const favorite = parseFavorite(value);
-    if (!unique.has(favorite.id)) {
-      unique.set(favorite.id, favorite);
+
+  for (const row of rows) {
+    if (row.length !== CSV_HEADERS.length) {
+      throw new Error('A CSV row has the wrong number of columns.');
+    }
+
+    const [rawKind, rawEnglish, rawPhonetic, rawChinese, rawDate] = row;
+    const kind = rawKind.trim();
+    const originalText = rawEnglish.trim();
+    const translatedText = rawChinese.trim();
+    const firstFavoritedAt = rawDate.trim();
+
+    if (
+      (kind !== 'word' && kind !== 'sentence') ||
+      !originalText ||
+      !translatedText ||
+      !firstFavoritedAt ||
+      Number.isNaN(Date.parse(firstFavoritedAt))
+    ) {
+      throw new Error('The CSV contains an invalid favorite row.');
+    }
+
+    const phonetic = rawPhonetic.trim();
+    const id = normalizedId(originalText, kind);
+    if (!unique.has(id)) {
+      unique.set(id, {
+        id,
+        kind,
+        originalText,
+        translatedText,
+        firstFavoritedAt,
+        ...(phonetic ? { phonetic } : {}),
+      });
     }
   }
 
