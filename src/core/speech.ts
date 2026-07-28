@@ -26,9 +26,16 @@ function browserDependencies(): {
     throw new Error('Pronunciation is unavailable in this browser.');
   }
 
+  const nativeSynthesis = globalThis.speechSynthesis;
+
   return {
-    synthesis: globalThis.speechSynthesis,
-    createUtterance: (text) => new SpeechSynthesisUtterance(text),
+    synthesis: {
+      cancel: () => nativeSynthesis.cancel(),
+      speak: (utterance) =>
+        nativeSynthesis.speak(utterance as unknown as SpeechSynthesisUtterance),
+    },
+    createUtterance: (text) =>
+      new SpeechSynthesisUtterance(text) as unknown as SpeechUtterance,
   };
 }
 
