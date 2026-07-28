@@ -3,56 +3,55 @@ import { describe, expect, it } from 'vitest';
 import type { FavoriteEntry } from './favorites';
 import {
   mergeFavorites,
-  parseFavoritesExport,
-  serializeFavorites,
+  parseFavoritesCsv,
+  serializeFavoritesCsv,
 } from './favorites-transfer';
 
 const word: FavoriteEntry = {
   id: 'word:hello',
   kind: 'word',
   originalText: 'Hello',
-  translatedText: '你好',
+  translatedText: '你好，世界',
   firstFavoritedAt: '2026-07-28T10:00:00.000Z',
   phonetic: '/həˈləʊ/',
 };
 
 const sentence: FavoriteEntry = {
-  id: 'sentence:How are you?',
+  id: 'sentence:He said "hello".',
   kind: 'sentence',
-  originalText: 'How are you?',
-  translatedText: '你好吗？',
+  originalText: 'He said "hello".',
+  translatedText: '他说：“你好”。',
   firstFavoritedAt: '2026-07-28T11:00:00.000Z',
 };
 
-describe('favorites transfer', () => {
-  it('round-trips a versioned local export', () => {
-    const text = serializeFavorites(
-      [word, sentence],
-      '2026-07-28T12:00:00.000Z',
-    );
+describe('favorites CSV transfer', () => {
+  it('round-trips an Excel-friendly CSV with commas and quotes', () => {
+    const text = serializeFavoritesCsv([word, sentence]);
 
-    expect(parseFavoritesExport(text)).toEqual([word, sentence]);
+    expect(text.startsWith('\uFEFFType,English,Phonetic,Chinese translation,First saved')).toBe(true);
+    expect(parseFavoritesCsv(text)).toEqual([word, sentence]);
   });
 
-  it('rejects unsupported files without returning partial data', () => {
-    expect(() => parseFavoritesExport('{"favorites":[]}')).toThrow(
-      'not a supported Translator favorites export',
+  it('rejects unrelated or malformed CSV without partial data', () => {
+    expect(() => parseFavoritesCsv('name,value\nhello,你好')).toThrow(
+      'expected Translator columns',
     );
-    expect(() => parseFavoritesExport('not json')).toThrow(
-      'valid Translator favorites JSON file',
-    );
+    expect(() =>
+      parseFavoritesCsv(
+        'Type,English,Phonetic,Chinese translation,First saved\nword,hello,,你好,not-a-date',
+      ),
+    ).toThrow('invalid favorite row');
   });
 
   it('normalizes imported ids and removes duplicates', () => {
-    const imported = parseFavoritesExport(
-      JSON.stringify({
-        format: 'translator-favorites',
-        version: 1,
-        favorites: [word, { ...word, id: 'untrusted-id', originalText: ' hello ' }],
-      }),
+    const imported = parseFavoritesCsv(
+      'Type,English,Phonetic,Chinese translation,First saved\n' +
+        'word,Hello,/həˈləʊ/,你好,2026-07-28T10:00:00.000Z\n' +
+        'word, hello ,/həˈləʊ/,您好,2026-07-28T12:00:00.000Z\n',
     );
 
-    expect(imported).toEqual([word]);
+    expect(imported).toHaveLength(1);
+    expect(imported[0]?.id).toBe('word:hello');
   });
 
   it('merges new entries while preserving existing entries', () => {
