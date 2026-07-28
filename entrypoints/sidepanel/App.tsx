@@ -1,12 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   isExtensionMessage,
   type ExtensionResponse,
   type GetLatestTranslationMessage,
   type SelectionTranslation,
-  type TranslateMockMessage,
 } from '../../src/core/messages';
+import {
+  hasTranslatorSettings,
+  TRANSLATOR_SETTINGS_KEY,
+  type TranslatorSettings,
+} from '../../src/core/settings';
+import { createAzureTranslationProvider } from '../../src/providers/azure-translation-provider';
+import { chromeTranslationProvider } from '../../src/providers/chrome-translation-provider';
+import type { TranslationResult } from '../../src/providers/translation-provider';
 
 function selectionFromResponse(response: ExtensionResponse): SelectionTranslation | null {
   if (!response.ok || !('data' in response) || response.data === null) {
@@ -16,26 +23,91 @@ function selectionFromResponse(response: ExtensionResponse): SelectionTranslatio
   return 'selection' in response.data ? response.data : null;
 }
 
+async function translateWithOptionalFallback(text: string): Promise<TranslationResult> {
+  const request = {
+    text,
+    sourceLanguage: 'en' as const,
+    targetLanguage: 'zh-CN' as const,
+  };
+
+  try {
+    return await chromeTranslationProvider.translate(request);
+  } catch (localError) {
+    const stored = await browser.storage.local.get(TRANSLATOR_SETTINGS_KEY);
+    const settings = stored[TRANSLATOR_SETTINGS_KEY] as TranslatorSettings | undefined;
+
+    if (settings?.azureFallbackEnabled && hasTranslatorSettings(settings)) {
+      return createAzureTranslationProvider(settings).translate(request);
+    }
+
+    throw localError instanceof Error
+      ? localError
+      : new Error('Chrome local translation failed.');
+  }
+}
+
 export function App() {
   const [latest, setLatest] = useState<SelectionTranslation | null>(null);
   const [status, setStatus] = useState('Select English text on a webpage');
   const [foundationResult, setFoundationResult] = useState<string>();
+  const requestId = useRef(0);
+
+  async function performTranslation(selectionState: SelectionTranslation) {
+    const currentRequest = ++requestId.current;
+    const pending = {
+      ...selectionState,
+      translation: null,
+      error: null,
+    };
+
+    setLatest(pending);
+    setStatus('Preparing local translation…');
+
+    try {
+      const translation = await translateWithOptionalFallback(selectionState.selection.text);
+
+      if (currentRequest !== requestId.current) {
+        return;
+      }
+
+      setLatest({ ...pending, translation });
+      setStatus(
+        translation.provider === 'azure'
+          ? 'Translation ready (Azure fallback)'
+          : 'Translation ready locally',
+      );
+    } catch (error) {
+      if (currentRequest !== requestId.current) {
+        return;
+      }
+
+      const message =
+        error instanceof Error ? error.message : 'Chrome local translation failed.';
+      setLatest({ ...pending, error: message });
+      setStatus(message);
+    }
+  }
 
   useEffect(() => {
     let active = true;
     const applySelection = (selection: SelectionTranslation) => {
-      setLatest(selection);
-      setStatus(selection.error ?? 'Translation ready');
+      if (!active) {
+        return;
+      }
+
+      if (selection.translation) {
+        setLatest(selection);
+        setStatus('Translation ready');
+        return;
+      }
+
+      void performTranslation(selection);
     };
     const request: GetLatestTranslationMessage = {
       type: 'GET_LATEST_TRANSLATION',
     };
 
     void browser.runtime.sendMessage(request).then((response: ExtensionResponse) => {
-      if (!active) {
-        return;
-      }
-
       const selection = selectionFromResponse(response);
       if (selection) {
         applySelection(selection);
@@ -44,7 +116,6 @@ export function App() {
 
     const onMessage = (message: unknown) => {
       if (
-        active &&
         isExtensionMessage(message) &&
         message.type === 'TRANSLATION_UPDATED'
       ) {
@@ -56,38 +127,27 @@ export function App() {
 
     return () => {
       active = false;
+      requestId.current += 1;
       browser.runtime.onMessage.removeListener(onMessage);
     };
   }, []);
 
   async function runFoundationCheck() {
-    setStatus('Checking…');
+    setStatus('Checking local translation…');
     setFoundationResult(undefined);
-    const message: TranslateMockMessage = {
-      type: 'TRANSLATE_MOCK',
-      payload: {
+
+    try {
+      const result = await chromeTranslationProvider.translate({
         text: 'hello',
         sourceLanguage: 'en',
         targetLanguage: 'zh-CN',
-      },
-    };
-
-    try {
-      const response = (await browser.runtime.sendMessage(message)) as ExtensionResponse;
-
-      if (
-        !response.ok ||
-        !('data' in response) ||
-        response.data === null ||
-        !('translatedText' in response.data)
-      ) {
-        throw new Error(response.ok ? 'Missing translation result.' : response.error);
-      }
-
-      setFoundationResult(response.data.translatedText);
-      setStatus('Foundation is working');
+      });
+      setFoundationResult(result.translatedText);
+      setStatus('Local translation is working');
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Foundation check failed');
+      setStatus(
+        error instanceof Error ? error.message : 'Local translation check failed',
+      );
     }
   }
 
@@ -96,19 +156,29 @@ export function App() {
       <p className="eyebrow">Milestone 2B</p>
       <h1>Translator</h1>
       <p className="intro">
-        Select English text to translate it into Simplified Chinese with Azure.
+        English is translated locally by Chrome. Azure is used only when you explicitly
+        configure it as a fallback.
       </p>
 
       <section className="card status-card" aria-live="polite">
         <span className="label">Status</span>
         <strong className={latest?.error ? 'error' : undefined}>{status}</strong>
+        {latest && !latest.translation ? (
+          <button
+            className="link-button"
+            type="button"
+            onClick={() => void performTranslation(latest)}
+          >
+            Translate / retry
+          </button>
+        ) : null}
         {latest?.error ? (
           <button
             className="link-button"
             type="button"
             onClick={() => browser.runtime.openOptionsPage()}
           >
-            Open settings
+            Optional fallback settings
           </button>
         ) : null}
       </section>
@@ -133,7 +203,11 @@ export function App() {
             </div>
             <div>
               <dt>Provider</dt>
-              <dd>{latest.translation.provider}</dd>
+              <dd>
+                {latest.translation.provider === 'chrome-local'
+                  ? 'Chrome local'
+                  : 'Azure fallback'}
+              </dd>
             </div>
             <div>
               <dt>Source</dt>
@@ -148,14 +222,14 @@ export function App() {
           <strong>{latest?.error ? 'Translation unavailable' : 'No selection yet'}</strong>
           <span>
             {latest?.error
-              ? 'Check the local Azure configuration and select the text again.'
+              ? 'Click Translate / retry. Chrome may need that click to download the language pack.'
               : 'Highlight a word, sentence, or paragraph on a normal webpage.'}
           </span>
         </section>
       )}
 
       <button className="secondary" type="button" onClick={runFoundationCheck}>
-        Run foundation check
+        Run local translation check
       </button>
       {foundationResult ? <output lang="zh-CN">{foundationResult}</output> : null}
     </main>
