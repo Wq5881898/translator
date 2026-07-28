@@ -40,16 +40,16 @@ describe('ChromeTranslationProvider', () => {
   });
 
   it('lets Chrome download a language pack when it is downloadable', async () => {
-    const translatorApi = api('downloadable', '你好');
+    const translatorApi = api('downloadable', '大家好。');
     const provider = createChromeTranslationProvider(translatorApi);
 
     const result = await provider.translate({
-      text: 'hello',
+      text: 'Hello everyone.',
       sourceLanguage: 'en',
       targetLanguage: 'zh-CN',
     });
 
-    expect(result.translatedText).toBe('你好');
+    expect(result.translatedText).toBe('大家好。');
   });
 
   it('returns a clear unsupported-device error', async () => {
