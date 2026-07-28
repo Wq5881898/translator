@@ -393,7 +393,7 @@ export function App() {
                 onClick={() => setShowFavorites(false)}
               >
                 ×
-                      
+                                    </button>
             </div>
         <FavoritesTransferControls
           favorites={favorites}
