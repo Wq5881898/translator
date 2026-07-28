@@ -2,41 +2,33 @@
 
 A lightweight English-learning browser extension.
 
-## Milestone 2A: webpage selection flow
+## Milestone 2B: real translation and phonetics
 
-This draft adds the first product interaction on top of the tested extension foundation:
+This draft adds real translation to the tested webpage-selection flow:
 
-- capture a word, sentence, or paragraph selected on a normal webpage
-- normalize whitespace, ignore empty or duplicate selections, and cap input at 5,000 characters
-- send the selection through the background worker and mock translation provider
-- retain the latest result in session storage
-- update the side panel with the selected English, mock Chinese result, text type, and source page
-- open the side panel by clicking the extension toolbar icon or choosing **Translate selection** from the selection context menu
+- translate English sentences and paragraphs into Simplified Chinese with Azure Translator
+- look up alternative Chinese meanings for English words with Azure Dictionary Lookup
+- retrieve English IPA from Free Dictionary API
+- store the Azure key and region only in the local browser profile
+- show authentication, quota, throttling, and missing-configuration errors
+- keep all network providers behind replaceable interfaces
 
-Real translation, phonetics, favorites, counts, OCR, and cloud services remain intentionally deferred.
+Only selected text is sent to the two providers. Screenshots, favorites, and browsing history are not uploaded.
 
-## Test build
+## Configure and test
 
-1. Open the latest successful **CI** run for pull request #3.
-2. Download the artifact named `translator-m02a-<commit-sha>`.
-3. Extract the ZIP and load the directory from `chrome://extensions` using **Load unpacked**.
-4. Open a normal webpage and select `hello`.
-5. Click the Translator toolbar icon, or right-click the selection and choose **Translate selection**.
-6. Confirm the side panel displays the selected English and the mock result `你好`.
-7. Select another sentence and confirm the open side panel updates automatically.
+1. Create an Azure Translator F0 resource.
+2. Copy its key and region from **Keys and Endpoint**.
+3. Load the latest `translator-m02b-<commit-sha>` test artifact.
+4. Open the extension options page and enter the key and region.
+5. Save, then select `hello` on a normal webpage.
+6. Confirm the side panel displays Chinese meanings and an IPA value.
+7. Select a sentence and confirm it displays a natural Simplified Chinese translation.
 
-Artifacts are retained for 90 days. Source commits and CI history remain in GitHub.
+Credentials are never committed to GitHub or included in test artifacts. They are stored locally in `browser.storage.local`. A locally stored extension key is appropriate only for this personal unpacked build; a distributed production extension should use a secure proxy or token service.
 
-## Run locally
+## Current exclusions
 
-Requirements: Node.js 22+ and Chrome or Edge.
+Favorites, translation counts, screenshot OCR, pronunciation playback, and a hosted credential proxy are deferred to later milestones.
 
-```bash
-npm install
-npm run check
-npm run build
-```
-
-Load `.output/chrome-mv3` as an unpacked extension.
-
-See [docs/architecture.md](docs/architecture.md) for the module boundaries.
+See [docs/architecture.md](docs/architecture.md) for module boundaries.

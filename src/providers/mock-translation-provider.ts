@@ -1,22 +1,9 @@
-import type {
-  TextKind,
-  TranslationProvider,
-  TranslationRequest,
-  TranslationResult,
+import {
+  classifyText,
+  type TranslationProvider,
+  type TranslationRequest,
+  type TranslationResult,
 } from './translation-provider';
-
-const SENTENCE_ENDING = /[.!?]$/u;
-const WORDS_IN_SENTENCE = 12;
-
-function classifyText(text: string): TextKind {
-  const words = text.trim().split(/\s+/u);
-
-  if (words.length === 1 && !SENTENCE_ENDING.test(text)) {
-    return 'word';
-  }
-
-  return words.length <= WORDS_IN_SENTENCE ? 'sentence' : 'paragraph';
-}
 
 export const mockTranslationProvider: TranslationProvider = {
   async translate(request: TranslationRequest): Promise<TranslationResult> {

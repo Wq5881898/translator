@@ -5,34 +5,18 @@ import {
   type SelectionTranslation,
   type TranslationUpdatedMessage,
 } from '../src/core/messages';
+import {
+  hasTranslatorSettings,
+  TRANSLATOR_SETTINGS_KEY,
+  type TranslatorSettings,
+} from '../src/core/settings';
 import { normalizeSelection } from '../src/core/selection';
+import { createAzureTranslationProvider } from '../src/providers/azure-translation-provider';
 import { mockTranslationProvider } from '../src/providers/mock-translation-provider';
 
 const LATEST_TRANSLATION_KEY = 'latestSelectionTranslation';
 
-async function translateSelection(
-  message: CaptureSelectionMessage,
-): Promise<SelectionTranslation> {
-  const text = normalizeSelection(message.payload.text);
-
-  if (!text) {
-    throw new Error('Select some English text first.');
-  }
-
-  const translation = await mockTranslationProvider.translate({
-    text,
-    sourceLanguage: 'en',
-    targetLanguage: 'zh-CN',
-  });
-
-  const state: SelectionTranslation = {
-    selection: {
-      ...message.payload,
-      text,
-    },
-    translation,
-  };
-
+async function publishState(state: SelectionTranslation): Promise<void> {
   await browser.storage.session.set({
     [LATEST_TRANSLATION_KEY]: state,
   });
@@ -42,8 +26,52 @@ async function translateSelection(
     payload: state,
   };
   await browser.runtime.sendMessage(update);
+}
 
-  return state;
+async function translateSelection(
+  message: CaptureSelectionMessage,
+): Promise<SelectionTranslation> {
+  const text = normalizeSelection(message.payload.text);
+  const selection = {
+    ...message.payload,
+    text,
+  };
+
+  if (!text) {
+    const state = {
+      selection,
+      translation: null,
+      error: 'Select some English text first.',
+    };
+    await publishState(state);
+    return state;
+  }
+
+  try {
+    const stored = await browser.storage.local.get(TRANSLATOR_SETTINGS_KEY);
+    const settings = stored[TRANSLATOR_SETTINGS_KEY] as TranslatorSettings | undefined;
+
+    if (!hasTranslatorSettings(settings)) {
+      throw new Error('Configure Azure Translator in settings first.');
+    }
+
+    const translation = await createAzureTranslationProvider(settings).translate({
+      text,
+      sourceLanguage: 'en',
+      targetLanguage: 'zh-CN',
+    });
+    const state = { selection, translation, error: null };
+    await publishState(state);
+    return state;
+  } catch (error) {
+    const state = {
+      selection,
+      translation: null,
+      error: error instanceof Error ? error.message : 'Translation failed.',
+    };
+    await publishState(state);
+    return state;
+  }
 }
 
 export default defineBackground(() => {
@@ -99,12 +127,11 @@ export default defineBackground(() => {
         return { ok: true, data: data ?? null };
       }
 
-      try {
-        if (message.type === 'CAPTURE_SELECTION') {
-          const data = await translateSelection(message);
-          return { ok: true, data };
-        }
+      if (message.type === 'CAPTURE_SELECTION') {
+        return { ok: true, data: await translateSelection(message) };
+      }
 
+      try {
         const data = await mockTranslationProvider.translate(message.payload);
         return { ok: true, data };
       } catch (error) {
