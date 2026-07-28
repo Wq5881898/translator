@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createAzureTranslationProvider } from './azure-translation-provider';
 
 const settings = {
+  azureFallbackEnabled: true,
   azureKey: 'test-key',
   azureRegion: 'westus2',
 };
