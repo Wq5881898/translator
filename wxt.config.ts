@@ -5,7 +5,7 @@ export default defineConfig({
   manifest: {
     name: 'Translator',
     description: 'A lightweight translation companion for English learning.',
-    version: '0.4.0',
+    version: '0.5.0',
     permissions: ['contextMenus', 'sidePanel', 'storage'],
     host_permissions: [
       'https://api.cognitive.microsofttranslator.com/*',
