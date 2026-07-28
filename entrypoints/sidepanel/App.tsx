@@ -18,6 +18,7 @@ import {
   TRANSLATOR_SETTINGS_KEY,
   type TranslatorSettings,
 } from '../../src/core/settings';
+import { browserSpeechPlayer } from '../../src/core/speech';
 import { createAzureTranslationProvider } from '../../src/providers/azure-translation-provider';
 import { chromeTranslationProvider } from '../../src/providers/chrome-translation-provider';
 import type { TranslationResult } from '../../src/providers/translation-provider';
@@ -65,7 +66,9 @@ export function App() {
   const [status, setStatus] = useState('Select English text on a webpage');
   const [foundationResult, setFoundationResult] = useState<string>();
   const [outputIsError, setOutputIsError] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
   const requestId = useRef(0);
+  const speechRequestId = useRef(0);
 
   async function performTranslation(selectionState: SelectionTranslation) {
     const currentRequest = ++requestId.current;
@@ -75,6 +78,13 @@ export function App() {
       error: null,
     };
 
+    speechRequestId.current += 1;
+    try {
+      browserSpeechPlayer.stop();
+    } catch {
+      // Translation remains available when speech synthesis is unsupported.
+    }
+    setSpeaking(false);
     setFoundationResult(undefined);
     setOutputIsError(false);
     setLatest(pending);
@@ -199,6 +209,44 @@ export function App() {
     setStatus('Removed from favorites');
   }
 
+  async function togglePronunciation(text: string) {
+    if (speaking) {
+      speechRequestId.current += 1;
+      browserSpeechPlayer.stop();
+      setSpeaking(false);
+      setStatus('Pronunciation stopped');
+      return;
+    }
+
+    const currentRequest = ++speechRequestId.current;
+    setFoundationResult(undefined);
+    setOutputIsError(false);
+    setSpeaking(true);
+    setStatus('Playing English pronunciation…');
+
+    try {
+      await browserSpeechPlayer.play(text);
+
+      if (currentRequest !== speechRequestId.current) {
+        return;
+      }
+
+      setSpeaking(false);
+      setStatus('Pronunciation finished');
+    } catch (error) {
+      if (currentRequest !== speechRequestId.current) {
+        return;
+      }
+
+      const message =
+        error instanceof Error ? error.message : 'Pronunciation failed.';
+      setSpeaking(false);
+      setStatus(message);
+      setFoundationResult(message);
+      setOutputIsError(true);
+    }
+  }
+
   async function runFoundationCheck() {
     setStatus('Checking local translation…');
     setFoundationResult(undefined);
@@ -230,7 +278,7 @@ export function App() {
 
   return (
     <main className="panel">
-      <p className="eyebrow">Milestone 3</p>
+      <p className="eyebrow">Milestone 4</p>
       <h1>Translator</h1>
       <p className="intro">
         Translate locally, then keep useful words and sentences in this browser.
@@ -274,6 +322,14 @@ export function App() {
             {latest.translation.phonetic ? (
               <p className="phonetic">{latest.translation.phonetic}</p>
             ) : null}
+            <button
+              className="speech-button secondary"
+              type="button"
+              aria-label={speaking ? 'Stop pronunciation' : 'Play English pronunciation'}
+              onClick={() => void togglePronunciation(latest.selection.text)}
+            >
+              {speaking ? '■ Stop pronunciation' : '▶ Play pronunciation'}
+            </button>
           </div>
           <div className="text-block result">
             <span className="label">Chinese translation</span>

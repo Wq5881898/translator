@@ -315,3 +315,11 @@ time {
   color: #17231c;
   background: #e7ede8;
 }
+
+
+.speech-button {
+  width: auto;
+  justify-self: start;
+  padding: 8px 10px;
+  font-size: 12px;
+}

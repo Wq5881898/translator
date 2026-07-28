@@ -2,46 +2,42 @@
 
 A lightweight English-learning browser extension.
 
-## Milestone 3: local favorites
+## Milestone 4: local pronunciation
 
-This draft adds local learning lists to the tested translation flow:
+This draft adds free local English pronunciation to the tested translation and favorites flow:
 
-- translate selected English locally with Chrome
-- retrieve English IPA from Free Dictionary API for single words
-- save and remove translated words, sentences, and paragraphs
-- keep separate word and sentence lists in the side panel
-- store word text, IPA when available, Chinese translation, and first favorite time
-- store sentence or paragraph text, Chinese translation, and first favorite time
-- keep all favorite data in the current browser profile with `browser.storage.local`
-- keep Azure Translator as an optional, disabled-by-default fallback
+- play the selected English word, sentence, or paragraph
+- use the browser and operating system speech-synthesis voice
+- stop the current speech from the same control
+- stop previous speech before playing new content
+- stop speech when a new selection starts translating
+- show an understandable error when speech synthesis or a voice is unavailable
+- keep translation and favorites behavior from previous milestones
 
-Translation counts are intentionally not implemented in this milestone.
-
-## Requirements
-
-- desktop Chrome 138 or later
-- an internet connection for the first English-to-Chinese language-pack download
-- no Azure account or API key for the default path
+Pronunciation is local and does not require an account, API key, or paid service. The current milestone uses the available US English voice. UK/US preference selection is deferred to the settings milestone.
 
 ## Test build
 
-1. Open the latest successful **CI** run for pull request #5.
-2. Download the artifact named `translator-m03-<commit-sha>`.
+1. Open the latest successful **CI** run for pull request #6.
+2. Download the artifact named `translator-m04-<commit-sha>`.
 3. Extract the ZIP and load the directory from `chrome://extensions` using **Load unpacked**.
 4. Refresh the webpage used for testing.
-5. Select an English word and confirm the side panel opens and translates it.
-6. Click **Save to favorites**.
-7. Confirm the word appears under **Words** with its translation, IPA when available, and first saved time.
-8. Select a sentence or paragraph, save it, and confirm it appears under **Sentences**.
-9. Select the same saved content again and confirm the action says **Remove from favorites**, with no duplicate entry.
-10. Remove an item and confirm it disappears after the browser or panel is reopened.
+5. Select an English word and click **Play pronunciation**.
+6. Confirm the button changes to **Stop pronunciation** while speech is active.
+7. Select and play a complete sentence.
+8. Start another pronunciation while audio is active and confirm the previous speech stops.
+9. Start translating a new selection while audio is active and confirm the previous speech stops.
+10. Confirm translation, heart favorites, and the hidden favorites view still work.
 
 ## Privacy
 
-Favorites remain only in the local browser profile. No favorites, browsing history, or screenshots are uploaded. A single English word is sent to Free Dictionary API only to retrieve IPA. Azure receives selected text only when the user explicitly enables and configures the optional fallback.
+Speech synthesis runs through the browser or operating system. Favorites remain in local browser storage. No audio, favorites, browsing history, or screenshots are uploaded.
 
-## Current exclusions
+## Deferred
 
-Translation counts, screenshot OCR, and pronunciation playback are deferred to later milestones.
+- UK/US voice preference and voice selection
+- favorite import/export
+- translation-count statistics
+- screenshot OCR
 
 See [docs/architecture.md](docs/architecture.md) for module boundaries.
