@@ -145,12 +145,11 @@ export function App() {
     setOutputIsError(false);
 
     try {
-      const result = await chromeTranslationProvider.translate({
+      await chromeTranslationProvider.translate({
         text: 'hello',
         sourceLanguage: 'en',
         targetLanguage: 'zh-CN',
       });
-      setFoundationResult(result.translatedText);
       setStatus('Local translation is working');
     } catch (error) {
       const message =
