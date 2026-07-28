@@ -5,13 +5,7 @@ import {
   type SelectionTranslation,
   type TranslationUpdatedMessage,
 } from '../src/core/messages';
-import {
-  hasTranslatorSettings,
-  TRANSLATOR_SETTINGS_KEY,
-  type TranslatorSettings,
-} from '../src/core/settings';
 import { normalizeSelection } from '../src/core/selection';
-import { createAzureTranslationProvider } from '../src/providers/azure-translation-provider';
 import { mockTranslationProvider } from '../src/providers/mock-translation-provider';
 
 const LATEST_TRANSLATION_KEY = 'latestSelectionTranslation';
@@ -25,53 +19,25 @@ async function publishState(state: SelectionTranslation): Promise<void> {
     type: 'TRANSLATION_UPDATED',
     payload: state,
   };
-  await browser.runtime.sendMessage(update);
+
+  await browser.runtime.sendMessage(update).catch(() => undefined);
 }
 
-async function translateSelection(
+async function captureSelection(
   message: CaptureSelectionMessage,
 ): Promise<SelectionTranslation> {
   const text = normalizeSelection(message.payload.text);
-  const selection = {
-    ...message.payload,
-    text,
+  const state: SelectionTranslation = {
+    selection: {
+      ...message.payload,
+      text,
+    },
+    translation: null,
+    error: text ? null : 'Select some English text first.',
   };
 
-  if (!text) {
-    const state = {
-      selection,
-      translation: null,
-      error: 'Select some English text first.',
-    };
-    await publishState(state);
-    return state;
-  }
-
-  try {
-    const stored = await browser.storage.local.get(TRANSLATOR_SETTINGS_KEY);
-    const settings = stored[TRANSLATOR_SETTINGS_KEY] as TranslatorSettings | undefined;
-
-    if (!hasTranslatorSettings(settings)) {
-      throw new Error('Configure Azure Translator in settings first.');
-    }
-
-    const translation = await createAzureTranslationProvider(settings).translate({
-      text,
-      sourceLanguage: 'en',
-      targetLanguage: 'zh-CN',
-    });
-    const state = { selection, translation, error: null };
-    await publishState(state);
-    return state;
-  } catch (error) {
-    const state = {
-      selection,
-      translation: null,
-      error: error instanceof Error ? error.message : 'Translation failed.',
-    };
-    await publishState(state);
-    return state;
-  }
+  await publishState(state);
+  return state;
 }
 
 export default defineBackground(() => {
@@ -95,7 +61,7 @@ export default defineBackground(() => {
     const text = normalizeSelection(info.selectionText ?? '');
 
     if (text) {
-      void translateSelection({
+      void captureSelection({
         type: 'CAPTURE_SELECTION',
         payload: {
           text,
@@ -128,7 +94,7 @@ export default defineBackground(() => {
       }
 
       if (message.type === 'CAPTURE_SELECTION') {
-        return { ok: true, data: await translateSelection(message) };
+        return { ok: true, data: await captureSelection(message) };
       }
 
       try {
