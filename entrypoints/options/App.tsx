@@ -61,8 +61,9 @@ export function App() {
     });
     setSettings(normalized);
     setStatus(
-      `${normalized.pronunciationLanguage === 'en-GB' ? 'UK' : 'US'} English pronunciation saved locally`,
+      `${normalized.pronunciationLanguage === 'en-GB' ? 'UK' : 'US'} English pronunciation saved locally. Closing…`,
     );
+    window.setTimeout(() => window.close(), 700);
   }
 
   return (
