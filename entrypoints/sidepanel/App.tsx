@@ -278,7 +278,7 @@ export function App() {
 
   return (
     <main className="panel">
-      <p className="eyebrow">Milestone 3</p>
+      <p className="eyebrow">Milestone 4</p>
       <h1>Translator</h1>
       <p className="intro">
         Translate locally, then keep useful words and sentences in this browser.
