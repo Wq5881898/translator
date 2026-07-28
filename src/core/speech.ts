@@ -1,3 +1,10 @@
+import {
+  DEFAULT_PRONUNCIATION_LANGUAGE,
+  isPronunciationLanguage,
+  TRANSLATOR_SETTINGS_KEY,
+  type TranslatorSettings,
+} from './settings';
+
 export type SpeechUtterance = {
   lang: string;
   rate: number;
@@ -69,7 +76,7 @@ export function createSpeechPlayer(
 
   return {
     stop,
-    async play(text: string, language = 'en-US') {
+    async play(text: string, language = DEFAULT_PRONUNCIATION_LANGUAGE) {
       const normalized = text.replace(/\s+/gu, ' ').trim();
       if (!normalized) {
         throw new Error('There is no English text to pronounce.');
@@ -117,4 +124,27 @@ export function createSpeechPlayer(
   };
 }
 
-export const browserSpeechPlayer = createSpeechPlayer();
+const localSpeechPlayer = createSpeechPlayer();
+
+export const browserSpeechPlayer: SpeechPlayer = {
+  stop: () => localSpeechPlayer.stop(),
+  async play(text, language) {
+    let preferredLanguage = language;
+
+    if (!preferredLanguage) {
+      try {
+        const stored = await browser.storage.local.get(TRANSLATOR_SETTINGS_KEY);
+        const settings = stored[TRANSLATOR_SETTINGS_KEY] as
+          | Partial<TranslatorSettings>
+          | undefined;
+        preferredLanguage = isPronunciationLanguage(settings?.pronunciationLanguage)
+          ? settings.pronunciationLanguage
+          : DEFAULT_PRONUNCIATION_LANGUAGE;
+      } catch {
+        preferredLanguage = DEFAULT_PRONUNCIATION_LANGUAGE;
+      }
+    }
+
+    return localSpeechPlayer.play(text, preferredLanguage);
+  },
+};

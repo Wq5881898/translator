@@ -53,14 +53,17 @@ label {
   font-weight: 700;
 }
 
-input {
+input,
+select {
   border: 1px solid #bdc9c0;
   border-radius: 10px;
   padding: 12px;
+  background: white;
   font: inherit;
 }
 
-input:focus {
+input:focus,
+select:focus {
   outline: 3px solid #b9d5c3;
   border-color: #246b45;
 }

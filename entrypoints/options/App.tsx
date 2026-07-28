@@ -7,6 +7,7 @@ import {
 } from '../../src/core/settings';
 
 const EMPTY_SETTINGS: TranslatorSettings = {
+  pronunciationLanguage: 'en-US',
   azureFallbackEnabled: false,
   azureKey: '',
   azureRegion: '',
@@ -15,7 +16,7 @@ const EMPTY_SETTINGS: TranslatorSettings = {
 export function App() {
   const [settings, setSettings] = useState(EMPTY_SETTINGS);
   const [status, setStatus] = useState(
-    'Chrome local translation is the default. Azure fallback is off.',
+    'US English pronunciation is active. Chrome local translation is the default.',
   );
 
   useEffect(() => {
@@ -30,15 +31,10 @@ export function App() {
         | Partial<TranslatorSettings>
         | undefined;
       if (saved) {
-        setSettings({
-          azureFallbackEnabled: saved.azureFallbackEnabled === true,
-          azureKey: saved.azureKey ?? '',
-          azureRegion: saved.azureRegion ?? '',
-        });
+        const normalized = normalizeSettings(saved);
+        setSettings(normalized);
         setStatus(
-          saved.azureFallbackEnabled
-            ? 'Optional Azure fallback configuration loaded'
-            : 'Chrome local translation is active',
+          `${normalized.pronunciationLanguage === 'en-GB' ? 'UK' : 'US'} English pronunciation loaded locally`,
         );
       }
     });
@@ -65,22 +61,36 @@ export function App() {
     });
     setSettings(normalized);
     setStatus(
-      normalized.azureFallbackEnabled
-        ? 'Azure fallback saved locally'
-        : 'Chrome local translation is active; Azure fallback is off',
+      `${normalized.pronunciationLanguage === 'en-GB' ? 'UK' : 'US'} English pronunciation saved locally. Closing…`,
     );
+    window.setTimeout(() => window.close(), 700);
   }
 
   return (
     <main>
-      <p className="eyebrow">Milestone 2B</p>
+      <p className="eyebrow">Milestone 5</p>
       <h1>Translator settings</h1>
       <p className="intro">
-        Translation runs locally in Chrome by default. No account, API key, or paid service is
-        required.
+        Pronunciation and preferences stay in this browser. Translation runs locally in Chrome by default.
       </p>
 
       <form onSubmit={saveSettings}>
+        <label>
+          English pronunciation
+          <select
+            value={settings.pronunciationLanguage}
+            onChange={(event) =>
+              setSettings((current) => ({
+                ...current,
+                pronunciationLanguage: event.target.value as TranslatorSettings['pronunciationLanguage'],
+              }))
+            }
+          >
+            <option value="en-US">US English</option>
+            <option value="en-GB">UK English</option>
+          </select>
+        </label>
+
         <label>
           <span>
             <input

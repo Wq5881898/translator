@@ -2,40 +2,38 @@
 
 A lightweight English-learning browser extension.
 
-## Milestone 4: local pronunciation
+## Milestone 5: local pronunciation settings
 
-This draft adds free local English pronunciation to the tested translation and favorites flow:
+This milestone adds one small local preference to the tested translation, favorites, and pronunciation flow:
 
-- play the selected English word, sentence, or paragraph
-- use the browser and operating system speech-synthesis voice
-- stop the current speech from the same control
-- stop previous speech before playing new content
-- stop speech when a new selection starts translating
-- show an understandable error when speech synthesis or a voice is unavailable
-- keep translation and favorites behavior from previous milestones
+- choose US English (`en-US`) or UK English (`en-GB`) pronunciation
+- save the preference in local browser storage
+- apply the preference to words, sentences, and paragraphs
+- default safely to US English when upgrading from an older version
+- keep Chrome local translation as the default
+- keep Azure as an optional fallback only
+- keep all translation, favorites, and pronunciation behavior from previous milestones
 
-Pronunciation is local and does not require an account, API key, or paid service. The current milestone uses the available US English voice. UK/US preference selection is deferred to the settings milestone.
+No account, API key, or paid speech service is required. The actual voice depends on the English voices installed in Chrome and the operating system.
 
 ## Test build
 
-1. Open the latest successful **CI** run for pull request #6.
-2. Download the artifact named `translator-m04-<commit-sha>`.
+1. Open the latest successful **CI** run for the M05 pull request.
+2. Download the artifact named `translator-m05-<commit-sha>`.
 3. Extract the ZIP and load the directory from `chrome://extensions` using **Load unpacked**.
-4. Refresh the webpage used for testing.
-5. Select an English word and click **Play pronunciation**.
-6. Confirm the button changes to **Stop pronunciation** while speech is active.
-7. Select and play a complete sentence.
-8. Start another pronunciation while audio is active and confirm the previous speech stops.
-9. Start translating a new selection while audio is active and confirm the previous speech stops.
-10. Confirm translation, heart favorites, and the hidden favorites view still work.
+4. Open the extension's **Options** page from `chrome://extensions` → Translator → **Details** → **Extension options**.
+5. Choose **UK English**, click **Save settings**, and confirm the saved message.
+6. Return to the Translator side panel, select English text, and play its pronunciation.
+7. Reopen the options page and confirm UK English is still selected.
+8. Change back to **US English**, save, and play the same text again.
+9. Confirm translation, heart favorites, and the hidden favorites view still work.
 
 ## Privacy
 
-Speech synthesis runs through the browser or operating system. Favorites remain in local browser storage. No audio, favorites, browsing history, or screenshots are uploaded.
+The pronunciation preference and favorites remain in local browser storage. Speech synthesis runs through the browser or operating system. No audio, favorites, browsing history, or screenshots are uploaded.
 
 ## Deferred
 
-- UK/US voice preference and voice selection
 - favorite import/export
 - translation-count statistics
 - screenshot OCR
