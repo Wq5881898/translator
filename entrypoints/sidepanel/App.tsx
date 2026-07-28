@@ -75,7 +75,12 @@ export function App() {
     try {
       const response = (await browser.runtime.sendMessage(message)) as ExtensionResponse;
 
-      if (!response.ok || !('data' in response) || !('translatedText' in response.data)) {
+      if (
+        !response.ok ||
+        !('data' in response) ||
+        response.data === null ||
+        !('translatedText' in response.data)
+      ) {
         throw new Error(response.ok ? 'Missing translation result.' : response.error);
       }
 
