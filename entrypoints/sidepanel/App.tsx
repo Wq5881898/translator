@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 
 import {
+  addFavorite,
+  FAVORITES_STORAGE_KEY,
+  findFavorite,
+  removeFavorite,
+  type FavoriteEntry,
+} from '../../src/core/favorites';
+import {
   isExtensionMessage,
   type ExtensionResponse,
   type GetLatestTranslationMessage,
@@ -46,8 +53,14 @@ async function translateWithOptionalFallback(text: string): Promise<TranslationR
   }
 }
 
+function formatFavoriteTime(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
 export function App() {
   const [latest, setLatest] = useState<SelectionTranslation | null>(null);
+  const [favorites, setFavorites] = useState<FavoriteEntry[]>([]);
   const [status, setStatus] = useState('Select English text on a webpage');
   const [foundationResult, setFoundationResult] = useState<string>();
   const [outputIsError, setOutputIsError] = useState(false);
@@ -95,6 +108,25 @@ export function App() {
 
   useEffect(() => {
     let active = true;
+
+    void browser.storage.local.get(FAVORITES_STORAGE_KEY).then((stored) => {
+      if (!active) {
+        return;
+      }
+
+      const saved = stored[FAVORITES_STORAGE_KEY];
+      if (Array.isArray(saved)) {
+        setFavorites(saved as FavoriteEntry[]);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
     const applySelection = (selection: SelectionTranslation) => {
       if (!active) {
         return;
@@ -139,6 +171,33 @@ export function App() {
     };
   }, []);
 
+  async function persistFavorites(nextFavorites: FavoriteEntry[]) {
+    await browser.storage.local.set({
+      [FAVORITES_STORAGE_KEY]: nextFavorites,
+    });
+    setFavorites(nextFavorites);
+  }
+
+  async function toggleCurrentFavorite() {
+    const translation = latest?.translation;
+    if (!translation) {
+      return;
+    }
+
+    const existing = findFavorite(favorites, translation);
+    const nextFavorites = existing
+      ? removeFavorite(favorites, existing.id)
+      : addFavorite(favorites, translation);
+
+    await persistFavorites(nextFavorites);
+    setStatus(existing ? 'Removed from favorites' : 'Saved locally to favorites');
+  }
+
+  async function removeSavedFavorite(id: string) {
+    await persistFavorites(removeFavorite(favorites, id));
+    setStatus('Removed from favorites');
+  }
+
   async function runFoundationCheck() {
     setStatus('Checking local translation…');
     setFoundationResult(undefined);
@@ -160,13 +219,20 @@ export function App() {
     }
   }
 
+  const currentFavorite = latest?.translation
+    ? findFavorite(favorites, latest.translation)
+    : undefined;
+  const wordFavorites = favorites.filter((favorite) => favorite.kind === 'word');
+  const sentenceFavorites = favorites.filter(
+    (favorite) => favorite.kind === 'sentence',
+  );
+
   return (
     <main className="panel">
-      <p className="eyebrow">Milestone 2B</p>
+      <p className="eyebrow">Milestone 3</p>
       <h1>Translator</h1>
       <p className="intro">
-        English is translated locally by Chrome. Azure is used only when you explicitly
-        configure it as a fallback.
+        Translate locally, then keep useful words and sentences in this browser.
       </p>
 
       <section className="card status-card" aria-live="polite">
@@ -205,6 +271,9 @@ export function App() {
             <span className="label">Chinese translation</span>
             <p lang="zh-CN">{latest.translation.translatedText}</p>
           </div>
+          <button type="button" onClick={() => void toggleCurrentFavorite()}>
+            {currentFavorite ? 'Remove from favorites' : 'Save to favorites'}
+          </button>
           <dl>
             <div>
               <dt>Type</dt>
@@ -236,6 +305,74 @@ export function App() {
           </span>
         </section>
       )}
+
+      <section className="favorites" aria-labelledby="favorites-heading">
+        <div className="section-heading">
+          <h2 id="favorites-heading">Favorites</h2>
+          <span>{favorites.length} saved locally</span>
+        </div>
+
+        <div className="favorite-group">
+          <h3>Words ({wordFavorites.length})</h3>
+          {wordFavorites.length ? (
+            <ul>
+              {wordFavorites.map((favorite) => (
+                <li key={favorite.id}>
+                  <div>
+                    <strong lang="en">{favorite.originalText}</strong>
+                    {favorite.phonetic ? (
+                      <span className="phonetic">{favorite.phonetic}</span>
+                    ) : null}
+                    <span lang="zh-CN">{favorite.translatedText}</span>
+                    <time dateTime={favorite.firstFavoritedAt}>
+                      First saved {formatFavoriteTime(favorite.firstFavoritedAt)}
+                    </time>
+                  </div>
+                  <button
+                    className="remove-button"
+                    type="button"
+                    aria-label={`Remove ${favorite.originalText}`}
+                    onClick={() => void removeSavedFavorite(favorite.id)}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted">No saved words yet.</p>
+          )}
+        </div>
+
+        <div className="favorite-group">
+          <h3>Sentences ({sentenceFavorites.length})</h3>
+          {sentenceFavorites.length ? (
+            <ul>
+              {sentenceFavorites.map((favorite) => (
+                <li key={favorite.id}>
+                  <div>
+                    <strong lang="en">{favorite.originalText}</strong>
+                    <span lang="zh-CN">{favorite.translatedText}</span>
+                    <time dateTime={favorite.firstFavoritedAt}>
+                      First saved {formatFavoriteTime(favorite.firstFavoritedAt)}
+                    </time>
+                  </div>
+                  <button
+                    className="remove-button"
+                    type="button"
+                    aria-label="Remove saved sentence"
+                    onClick={() => void removeSavedFavorite(favorite.id)}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted">No saved sentences yet.</p>
+          )}
+        </div>
+      </section>
 
       <button className="secondary" type="button" onClick={runFoundationCheck}>
         Run local translation check
