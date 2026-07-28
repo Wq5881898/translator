@@ -1,11 +1,29 @@
 import type { TranslationRequest, TranslationResult } from '../providers/translation-provider';
 
-export type ContentReadyMessage = {
-  type: 'CONTENT_READY';
-  payload: {
-    title: string;
-    url: string;
-  };
+export type SelectionContext = {
+  text: string;
+  pageTitle: string;
+  pageUrl: string;
+  capturedAt: string;
+};
+
+export type SelectionTranslation = {
+  selection: SelectionContext;
+  translation: TranslationResult;
+};
+
+export type CaptureSelectionMessage = {
+  type: 'CAPTURE_SELECTION';
+  payload: SelectionContext;
+};
+
+export type GetLatestTranslationMessage = {
+  type: 'GET_LATEST_TRANSLATION';
+};
+
+export type TranslationUpdatedMessage = {
+  type: 'TRANSLATION_UPDATED';
+  payload: SelectionTranslation;
 };
 
 export type TranslateMockMessage = {
@@ -13,11 +31,16 @@ export type TranslateMockMessage = {
   payload: TranslationRequest;
 };
 
-export type ExtensionMessage = ContentReadyMessage | TranslateMockMessage;
+export type ExtensionMessage =
+  | CaptureSelectionMessage
+  | GetLatestTranslationMessage
+  | TranslationUpdatedMessage
+  | TranslateMockMessage;
 
 export type ExtensionResponse =
-  | { ok: true; data: TranslationResult }
   | { ok: true }
+  | { ok: true; data: TranslationResult }
+  | { ok: true; data: SelectionTranslation | null }
   | { ok: false; error: string };
 
 export function isExtensionMessage(value: unknown): value is ExtensionMessage {
@@ -26,5 +49,10 @@ export function isExtensionMessage(value: unknown): value is ExtensionMessage {
   }
 
   const { type } = value as { type?: unknown };
-  return type === 'CONTENT_READY' || type === 'TRANSLATE_MOCK';
+  return (
+    type === 'CAPTURE_SELECTION' ||
+    type === 'GET_LATEST_TRANSLATION' ||
+    type === 'TRANSLATION_UPDATED' ||
+    type === 'TRANSLATE_MOCK'
+  );
 }

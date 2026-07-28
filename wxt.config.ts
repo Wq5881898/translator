@@ -5,8 +5,8 @@ export default defineConfig({
   manifest: {
     name: 'Translator',
     description: 'A lightweight translation companion for English learning.',
-    version: '0.1.0',
-    permissions: ['contextMenus', 'sidePanel'],
+    version: '0.2.0',
+    permissions: ['contextMenus', 'sidePanel', 'storage'],
     action: {
       default_title: 'Open Translator',
     },
