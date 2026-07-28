@@ -31,3 +31,12 @@ jobs:
 
       - name: Build extension
         run: npm run build
+
+      - name: Upload test extension
+        uses: actions/upload-artifact@v4
+        with:
+          name: translator-m01-${{ github.sha }}
+          path: .output/chrome-mv3/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
