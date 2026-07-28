@@ -393,7 +393,9 @@ export function App() {
                 onClick={() => setShowFavorites(false)}
               >
                 ×
-                      <FavoritesTransferControls
+                      
+            </div>
+        <FavoritesTransferControls
           favorites={favorites}
           onImport={persistFavorites}
           onStatus={(message, isError = false) => {
@@ -403,8 +405,6 @@ export function App() {
           }}
         />
 
-</button>
-            </div>
 
         <div className="favorite-group">
           <h3>Words ({wordFavorites.length})</h3>
