@@ -34,7 +34,7 @@ describe('favorites CSV transfer', () => {
 
   it('rejects unrelated or malformed CSV without partial data', () => {
     expect(() => parseFavoritesCsv('name,value\nhello,你好')).toThrow(
-      'expected Translator columns',
+      'valid Translator favorites CSV file',
     );
     expect(() =>
       parseFavoritesCsv(
