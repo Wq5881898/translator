@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { FavoritesTransferControls } from './FavoritesTransferControls';
+
 
 import {
   addFavorite,
@@ -278,7 +280,7 @@ export function App() {
 
   return (
     <main className="panel">
-      <p className="eyebrow">Milestone 4</p>
+            <p className="eyebrow">Milestone 6</p>
       <h1>Translator</h1>
       <p className="intro">
         Translate locally, then keep useful words and sentences in this browser.
@@ -391,8 +393,18 @@ export function App() {
                 onClick={() => setShowFavorites(false)}
               >
                 ×
-              </button>
+                                    </button>
             </div>
+        <FavoritesTransferControls
+          favorites={favorites}
+          onImport={persistFavorites}
+          onStatus={(message, isError = false) => {
+            setStatus(message);
+            setFoundationResult(message);
+            setOutputIsError(isError);
+          }}
+        />
+
 
         <div className="favorite-group">
           <h3>Words ({wordFavorites.length})</h3>

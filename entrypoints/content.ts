@@ -5,11 +5,17 @@ export default defineContentScript({
   matches: ['<all_urls>'],
   main() {
     let previousSelection = '';
+    let captureTimer: number | undefined;
 
     function sendCurrentSelection() {
       const text = normalizeSelection(window.getSelection()?.toString() ?? '');
 
-      if (!text || text === previousSelection) {
+      if (!text) {
+        previousSelection = '';
+        return;
+      }
+
+      if (text === previousSelection) {
         return;
       }
 
@@ -30,10 +36,22 @@ export default defineContentScript({
       });
     }
 
-    document.addEventListener('mouseup', sendCurrentSelection);
+    function scheduleSelectionCapture(delay = 0) {
+      if (captureTimer !== undefined) {
+        window.clearTimeout(captureTimer);
+      }
+
+      captureTimer = window.setTimeout(() => {
+        captureTimer = undefined;
+        sendCurrentSelection();
+      }, delay);
+    }
+
+    document.addEventListener('selectionchange', () => scheduleSelectionCapture(120));
+    document.addEventListener('mouseup', () => scheduleSelectionCapture());
     document.addEventListener('keyup', (event) => {
       if (event.shiftKey) {
-        sendCurrentSelection();
+        scheduleSelectionCapture();
       }
     });
   },
