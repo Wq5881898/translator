@@ -1,27 +1,28 @@
-# Translator Stage 2 · Batch A
+# Translator Stage 2 · Batch B
 
-This directory contains the first technical-validation batch for the Windows companion.
+本目录包含第二阶段 Windows 桌面端，以及与 Chrome 扩展通信的本地桥接程序。
 
-## Scope
+## 本批次范围
 
-- .NET 10 WPF desktop foundation;
-- multi-monitor region selection prototype;
-- screenshot kept in memory and disposed after local OCR;
-- Windows local OCR adapter;
-- versioned translation Provider and Mock Provider;
-- Chrome Native Messaging frame protocol and host health response;
-- automated technical validation.
+- 保留第一批次的多显示器区域截图和本地中英文 OCR；
+- OCR 文字可在桌面端编辑；
+- 桌面端通过命名管道连接 Native Messaging Host；
+- Native Messaging Host 与 Chrome 扩展交换版本化 JSON 消息；
+- 扩展在离屏页面调用 Chrome 本地 Translator API；
+- 中文结果返回桌面端，截图不离开内存；
+- 提供当前用户级桥接安装脚本，不需要管理员权限。
 
-This is not the Stage 2 product UI and does not yet provide the full browser-bridge translation path, global shortcut, favorites, installer, or cloud Provider.
+本批次暂不包含全局快捷键、收藏库同步、朗读、Azure Provider 和正式安装器。
 
-## Projects
+## 项目
 
-- `Translator.Core`: stable OCR, translation, text and bridge contracts.
-- `Translator.Desktop`: region selection, local OCR and editable result prototype.
-- `Translator.BridgeHost`: Chrome Native Messaging stdio host prototype.
-- `Translator.TechnicalValidation`: dependency-free executable checks.
+- `Translator.Core`：OCR、翻译、文本和桥接协议。
+- `Translator.Desktop`：截图、OCR、编辑、翻译与结果界面。
+- `Translator.BridgeHost`：Chrome Native Messaging 与桌面命名管道中继。
+- `Translator.TechnicalValidation`：不依赖测试框架的可执行技术检查。
+- `bridge`：Native Messaging 清单模板及安装脚本。
 
-## Build and validate
+## 构建和验证
 
 ```powershell
 dotnet restore desktop\Translator.Stage2.slnx --configfile NuGet.Config
@@ -29,10 +30,12 @@ dotnet build desktop\Translator.Stage2.slnx --no-restore --configuration Release
 dotnet run --project desktop\Translator.TechnicalValidation --no-build --configuration Release
 ```
 
-## Privacy boundary
+完整安装与联调步骤见 `docs/stage-2/BATCH_B_TEST_GUIDE_ZH.md`。
 
-`ScreenRegionCapture` returns a `MemoryStream`. The stream is passed only to `IOcrProvider`, never to `ITranslationProvider`, Native Messaging, disk, clipboard, logs, or the network. The caller owns and disposes it with `using`.
+## 隐私边界
 
-## Native Messaging
+`ScreenRegionCapture` 只返回内存流。截图仅传给本地 OCR，识别结束后立即释放；进入命名管道、浏览器桥接和翻译 Provider 的只有用户可编辑的识别文字。截图不会写入磁盘、剪贴板、日志或上传网络。
 
-The extension and Host share protocol version `1.0`. The template in `desktop/bridge` must be filled with the published Host path and the unpacked extension ID during the later installer/bridge integration batch. Chrome requires the `nativeMessaging` permission and a registered host with an exact `allowed_origins` extension ID.
+## 固定扩展 ID
+
+测试包使用清单公钥固定扩展 ID 为 `djbkcmlpogpnafgifiocehmkkghnhjjb`。桥接安装脚本和 Native Messaging 清单仅允许该扩展来源，避免每次解压路径变化导致 ID 和注册信息失效。

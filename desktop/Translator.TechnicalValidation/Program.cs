@@ -58,6 +58,7 @@ var checks = new (string Name, Func<Task> Run)[]
     ("mock provider", ValidateMockAsync),
     ("native frame UTF-8 round-trip", ValidateFramingAsync),
     ("invalid native frame rejection", ValidateInvalidLengthAsync),
+    ("desktop and native host translation relay", ValidateNativeHostRelayAsync),
     ("packaged English OCR on in-memory image", ValidatePackagedEnglishOcrAsync),
     ("non-English OCR is rejected with a reason", ValidateNonEnglishOcrAsync),
     ("Windows local OCR on in-memory image", ValidateWindowsOcrAsync),
@@ -123,6 +124,71 @@ static async Task ValidateInvalidLengthAsync()
     try { _ = await NativeMessageFraming.ReadAsync(stream, CancellationToken.None); }
     catch (InvalidDataException) { return; }
     throw new InvalidOperationException("Invalid frame was accepted.");
+}
+static async Task ValidateNativeHostRelayAsync()
+{
+    var desktopRoot = Path.GetFullPath(Path.Combine(
+        AppContext.BaseDirectory,
+        "..",
+        "..",
+        "..",
+        ".."));
+    var hostPath = Path.Combine(
+        desktopRoot,
+        "Translator.BridgeHost",
+        "bin",
+        "Release",
+        "net10.0-windows10.0.19041.0",
+        "Translator.BridgeHost.exe");
+    Assert(File.Exists(hostPath), $"Bridge Host was not built: {hostPath}");
+    using var process = Process.Start(new ProcessStartInfo(hostPath)
+    {
+        RedirectStandardInput = true,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        UseShellExecute = false,
+        CreateNoWindow = true,
+    }) ?? throw new InvalidOperationException("Bridge Host could not be started.");
+    try
+    {
+        var provider = new BrowserBridgeTranslationProvider();
+        var translationTask = provider.TranslateAsync(
+            new TranslationRequest("relay-test", "Hello world."),
+            CancellationToken.None);
+        var forwarded = await NativeMessageFraming.ReadAsync(
+            process.StandardOutput.BaseStream,
+            CancellationToken.None)
+            ?? throw new InvalidOperationException("Host closed before forwarding a request.");
+        Assert(forwarded.MessageType == "translation.request", "Host did not forward translation request.");
+        Assert(
+            forwarded.Payload.GetProperty("text").GetString() == "Hello world.",
+            "Host changed the translation text.");
+        var response = BridgeEnvelope.Create(
+            "translation.result",
+            forwarded.RequestId,
+            new
+            {
+                originalText = "Hello world.",
+                translatedText = "你好，世界。",
+                textKind = "sentence",
+                provider = "chrome-local",
+            });
+        await NativeMessageFraming.WriteAsync(
+            process.StandardInput.BaseStream,
+            response,
+            CancellationToken.None);
+        var result = await translationTask;
+        Assert(result.TranslatedText == "你好，世界。", "Desktop did not receive translated text.");
+        Assert(result.Provider == "chrome-local", "Desktop did not preserve provider metadata.");
+    }
+    finally
+    {
+        if (!process.HasExited)
+        {
+            process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync();
+        }
+    }
 }
 static async Task ValidateWindowsOcrAsync()
 {
