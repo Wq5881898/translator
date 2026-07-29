@@ -1,0 +1,42 @@
+<Window x:Class="Translator.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Translator Stage 2 · Batch A" Height="570" Width="760"
+        MinHeight="480" MinWidth="640" WindowStartupLocation="CenterScreen">
+    <Grid Margin="28">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <StackPanel>
+            <TextBlock FontSize="13" Foreground="#52635A" FontWeight="SemiBold" Text="STAGE 2 · TECHNICAL VALIDATION"/>
+            <TextBlock Margin="0,8,0,0" FontSize="30" FontWeight="Bold" Text="Screenshot and local OCR"/>
+            <TextBlock Margin="0,8,0,0" Foreground="#52635A" TextWrapping="Wrap"
+                       Text="The image stays in memory, is sent only to local OCR, and is disposed after recognition."/>
+        </StackPanel>
+        <StackPanel Grid.Row="1" Margin="0,24,0,16" Orientation="Horizontal">
+            <Button x:Name="CaptureButton" Width="170" Height="42" Click="CaptureButton_Click" Content="Select screen region"/>
+            <Button x:Name="MockButton" Margin="12,0,0,0" Width="160" Height="42" Click="MockButton_Click" Content="Run mock translation"/>
+        </StackPanel>
+        <Grid Grid.Row="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <TextBlock FontWeight="SemiBold" Text="Recognized English (editable)"/>
+            <TextBox x:Name="RecognizedText" Grid.Row="1" Margin="0,8,0,12" AcceptsReturn="True"
+                     TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Padding="12" FontSize="16"/>
+            <Border Grid.Row="2" Padding="12" Background="#F2F7F3" CornerRadius="8">
+                <StackPanel>
+                    <TextBlock FontWeight="SemiBold" Text="Validation status"/>
+                    <TextBlock x:Name="StatusText" Margin="0,5,0,0" TextWrapping="Wrap" Text="Ready. No screenshot has been created."/>
+                </StackPanel>
+            </Border>
+        </Grid>
+        <TextBlock Grid.Row="3" Margin="0,18,0,0" Foreground="#69786F" TextWrapping="Wrap"
+                   Text="Batch A validates the Windows foundation, in-memory capture, local OCR adapter, provider contract, mock flow, and native bridge protocol."/>
+    </Grid>
+</Window>

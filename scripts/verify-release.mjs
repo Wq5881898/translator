@@ -14,7 +14,7 @@ const requiredFiles = [
 await Promise.all(requiredFiles.map((path) => access(path)));
 
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-const expectedPermissions = ['contextMenus', 'sidePanel', 'storage'];
+const expectedPermissions = ['contextMenus', 'sidePanel', 'storage', 'nativeMessaging'];
 const actualPermissions = [...(manifest.permissions ?? [])].sort();
 
 if (JSON.stringify(actualPermissions) !== JSON.stringify([...expectedPermissions].sort())) {

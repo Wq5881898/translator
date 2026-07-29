@@ -1,0 +1,9 @@
+{
+  "name": "com.wq5881898.translator.stage2",
+  "description": "Translator Stage 2 native messaging technical validation host",
+  "path": "__ABSOLUTE_HOST_EXE_PATH__",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://__UNPACKED_EXTENSION_ID__/"
+  ]
+}
