@@ -60,6 +60,12 @@ static Task ValidateTextRulesAsync()
         "Valid English OCR was rejected.");
     Assert(!TextRules.AssessEnglishOcr("S O m e O n e", 0.40f).IsReliable,
         "Low-confidence OCR gibberish was accepted.");
+    Assert(TextRules.CleanEnglishOcrArtifacts("| fll Translator.Desktop.exe") == "Translator.Desktop.exe",
+        "Leading icon artifacts were not removed.");
+    Assert(!TextRules.AssessEnglishOcr("fll", 0.80f).IsReliable,
+        "An icon-only pseudo-word was accepted.");
+    Assert(TextRules.AssessEnglishOcr("Translator.Desktop.exe", 0.80f).IsReliable,
+        "A valid file name was rejected.");
     return Task.CompletedTask;
 }
 static async Task ValidateMockAsync()

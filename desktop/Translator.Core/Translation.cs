@@ -28,7 +28,7 @@ public static class TextRules
 
     public static EnglishTextAssessment AssessEnglishOcr(string text, float? confidence = null)
     {
-        var normalized = Normalize(text);
+        var normalized = CleanEnglishOcrArtifacts(text);
         if (normalized.Length == 0)
         {
             return new EnglishTextAssessment(false, "No text was recognized.");
@@ -52,6 +52,13 @@ public static class TextRules
             .Select(word => new string(word.Where(IsLatinLetter).ToArray()))
             .Where(word => word.Length > 0)
             .ToArray();
+        if (words.Length == 1 &&
+            words[0].Length <= 3 &&
+            words[0].All(character => char.IsLower(character)) &&
+            !words[0].Any(IsEnglishVowel))
+        {
+            return new EnglishTextAssessment(false, "The result looks like a graphic mistaken for a short word.");
+        }
         var suspiciousSingles = words.Count(word =>
             word.Length == 1 &&
             !word.Equals("a", StringComparison.OrdinalIgnoreCase) &&
@@ -63,8 +70,7 @@ public static class TextRules
 
         if (letters.Length >= 8)
         {
-            var vowelCount = letters.Count(character =>
-                "aeiouyAEIOUY".Contains(character));
+            var vowelCount = letters.Count(IsEnglishVowel);
             if ((double)vowelCount / letters.Length < 0.12)
             {
                 return new EnglishTextAssessment(false, "The result does not look like English text.");
@@ -73,6 +79,33 @@ public static class TextRules
 
         return new EnglishTextAssessment(true, "Reliable English text detected.");
     }
+
+    public static string CleanEnglishOcrArtifacts(string text)
+    {
+        var tokens = Normalize(text).Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+        while (tokens.Count > 1 && IsLikelyLeadingGraphicArtifact(tokens[0]))
+        {
+            tokens.RemoveAt(0);
+        }
+
+        return string.Join(' ', tokens);
+    }
+
+    private static bool IsLikelyLeadingGraphicArtifact(string token)
+    {
+        var letters = new string(token.Where(IsLatinLetter).ToArray());
+        if (letters.Length == 0)
+        {
+            return !token.Any(char.IsDigit);
+        }
+
+        return letters.Length <= 3 &&
+               letters.All(char.IsLower) &&
+               !letters.Any(IsEnglishVowel);
+    }
+
+    private static bool IsEnglishVowel(char character) =>
+        "aeiouyAEIOUY".Contains(character);
 
     private static bool IsLatinLetter(char character) =>
         character is >= 'A' and <= 'Z' or >= 'a' and <= 'z';
