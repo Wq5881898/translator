@@ -4,8 +4,8 @@ export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   manifest: {
     name: 'Translator',
-    description: 'A lightweight translation companion for English learning.',
-    version: '0.7.0',
+    description: 'A lightweight local-first translation companion for English learning.',
+    version: '1.0.0',
     permissions: ['contextMenus', 'sidePanel', 'storage'],
     host_permissions: [
       'https://api.cognitive.microsofttranslator.com/*',
