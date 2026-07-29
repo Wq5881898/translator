@@ -6,7 +6,7 @@ export default defineConfig({
     name: 'Translator',
     description: 'A lightweight local-first translation companion for English learning.',
     version: '1.0.0',
-    permissions: ['contextMenus', 'sidePanel', 'storage'],
+    permissions: ['contextMenus', 'sidePanel', 'storage', 'nativeMessaging'],
     host_permissions: [
       'https://api.cognitive.microsofttranslator.com/*',
       'https://api.dictionaryapi.dev/*',
