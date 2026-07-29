@@ -1,4 +1,8 @@
 import {
+  validateEnglishTranslationInput,
+  withTimeout,
+} from '../core/translation-guard';
+import {
   classifyText,
   type TranslationProvider,
   type TranslationRequest,
@@ -72,24 +76,23 @@ export function createChromeTranslationProvider(
 
   return {
     async translate(request: TranslationRequest): Promise<TranslationResult> {
-      const text = request.text.trim();
-
-      if (!text) {
-        throw new Error('Text is required.');
-      }
-
+      const text = validateEnglishTranslationInput(request.text);
       const textKind = classifyText(text);
-      const session = await getSession();
+      const session = await withTimeout(getSession());
       const [translatedText, phoneticResult] = await Promise.all([
-        session.translate(text),
+        withTimeout(session.translate(text)),
         textKind === 'word'
-          ? fetchEnglishPhonetic(text).catch(() => undefined)
+          ? withTimeout(
+              fetchEnglishPhonetic(text).catch(() => undefined),
+              8_000,
+              'Dictionary lookup timed out.',
+            )
           : Promise.resolve(undefined),
       ]);
       const normalizedTranslation = translatedText.trim();
 
       if (!normalizedTranslation) {
-        throw new Error('Chrome returned an empty translation.');
+        throw new Error('Chrome returned an empty translation. Try again.');
       }
 
       return {
