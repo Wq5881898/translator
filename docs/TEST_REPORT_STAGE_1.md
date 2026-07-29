@@ -1,6 +1,6 @@
 # Translator Stage 1 Test Report
 
-Report date: 2026-07-28  
+Report date: 2026-07-29  
 Target: `1.0.0-rc.1`  
 Browsers: desktop Chrome primary; Edge compatibility uses the same Chromium Manifest V3 unpacked build.
 
@@ -68,6 +68,7 @@ Covered business rules include:
 | U-06 | Save state was unclear in settings | Success message remained below the fold and the settings window stayed open | Success is shown briefly and the settings window closes automatically | Passed user retest |
 | U-07 | JSON export was difficult to read | Backup format prioritized machine structure | Export/import changed to UTF-8 CSV readable in Excel and text editors | Passed user retest |
 | U-08 | Pronunciation displayed phonetics but could not play audio | No speech module existed | Local Web Speech playback, stop control, and US/UK preference added | Passed user retest |
+| U-09 | Invalid edited CSV appeared to keep importing because its error was only visible on the translation page | Import feedback used the page-level status area outside the open favorites dialog | Import progress, success, and failure now render inside the favorites dialog; invalid rows identify their CSV row number and the busy state always ends | Fixed; automated regression passed, awaiting user retest |
 
 ## 4. CI defects found during development
 
@@ -91,7 +92,7 @@ Covered business rules include:
 - Add and remove word and sentence favorites.
 - Export CSV, open it in Excel, and verify Chinese text and five columns.
 - Re-import the CSV and verify merge without duplicates.
-- Import malformed CSV and verify no partial changes.
+- Import malformed CSV and verify the error appears inside the favorites dialog, includes the row number, makes no partial changes, and restores the Import CSV button.
 - Save settings and verify automatic window closure.
 - Clear local data: first click arms the action, second click clears; cancel prevents clearing.
 
