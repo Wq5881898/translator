@@ -28,7 +28,7 @@ public static class TextRules
 
     public static EnglishTextAssessment AssessEnglishOcr(string text, float? confidence = null)
     {
-        var normalized = CleanEnglishOcrArtifacts(text);
+        var normalized = CleanEnglishOcrArtifacts(ExtractEnglishOcrContent(text));
         if (normalized.Length == 0)
         {
             return new EnglishTextAssessment(false, "No text was recognized.");
@@ -42,7 +42,10 @@ public static class TextRules
         }
 
         var letters = normalized.Where(IsLatinLetter).ToArray();
-        if (letters.Length < 2)
+        var isValidSingleLetterWord =
+            normalized.Equals("a", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("i", StringComparison.OrdinalIgnoreCase);
+        if (letters.Length < 2 && !isValidSingleLetterWord)
         {
             return new EnglishTextAssessment(false, "No reliable English letters were detected.");
         }
@@ -63,6 +66,14 @@ public static class TextRules
             word.Length == 1 &&
             !word.Equals("a", StringComparison.OrdinalIgnoreCase) &&
             !word.Equals("i", StringComparison.OrdinalIgnoreCase));
+        var containsMeaningfulWord = words.Any(word =>
+            word.Length >= 2 ||
+            word.Equals("a", StringComparison.OrdinalIgnoreCase) ||
+            word.Equals("i", StringComparison.OrdinalIgnoreCase));
+        if (!containsMeaningfulWord)
+        {
+            return new EnglishTextAssessment(false, "Only numbers, symbols, or isolated unit letters were detected.");
+        }
         if (words.Length >= 4 && suspiciousSingles > Math.Max(1, words.Length / 3))
         {
             return new EnglishTextAssessment(false, "The result contains too many isolated letters.");
@@ -88,8 +99,104 @@ public static class TextRules
             tokens.RemoveAt(0);
         }
 
+        for (var index = 1; index < tokens.Count; index++)
+        {
+            var previousLetters = new string(tokens[index - 1].Where(IsLatinLetter).ToArray());
+            var currentLetters = new string(tokens[index].Where(IsLatinLetter).ToArray());
+            var previousLooksTechnical =
+                previousLetters.Skip(1).Any(char.IsUpper) ||
+                previousLetters.Length >= 2 && previousLetters.All(char.IsUpper);
+            if (previousLooksTechnical &&
+                currentLetters.Length == 2 &&
+                char.IsUpper(currentLetters[0]) &&
+                currentLetters[1] == 'l')
+            {
+                tokens[index] = tokens[index].Replace("Cl", "CI", StringComparison.Ordinal);
+            }
+        }
+
         return string.Join(' ', tokens);
     }
+
+    public static string ExtractEnglishOcrContent(string text)
+    {
+        var extracted = text.Select(character =>
+            IsLatinLetter(character) ||
+            char.IsDigit(character) ||
+            character is ' ' or '\r' or '\n' or '\t' ||
+            character is '.' or ',' or ':' or ';' or '!' or '?' or
+                '\'' or '"' or '-' or '_' or '/' or '\\' or
+                '(' or ')' or '[' or ']' or '{' or '}' or
+                '+' or '=' or '%' or '#' or '@' or '&' or '*'
+                ? character
+                : ' ');
+        return Normalize(new string(extracted.ToArray()));
+    }
+
+    public static string MergeEnglishFromBilingualOcr(string englishOnly, string bilingual)
+    {
+        if (!bilingual.Any(IsCjkCharacter))
+        {
+            return Normalize(englishOnly);
+        }
+
+        var englishTokens = Normalize(englishOnly)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var bilingualTokens = ExtractEnglishOcrContent(bilingual)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var merged = new List<string>();
+        var englishIndex = 0;
+
+        foreach (var bilingualToken in bilingualTokens)
+        {
+            var matchIndex = -1;
+            for (var candidate = englishIndex;
+                 candidate < englishTokens.Length && candidate <= englishIndex + 2;
+                 candidate++)
+            {
+                if (AreNearOcrTokens(englishTokens[candidate], bilingualToken))
+                {
+                    matchIndex = candidate;
+                    break;
+                }
+            }
+
+            if (matchIndex >= 0)
+            {
+                merged.Add(englishTokens[matchIndex]);
+                englishIndex = matchIndex + 1;
+            }
+            else
+            {
+                merged.Add(bilingualToken);
+            }
+        }
+
+        return Normalize(string.Join(' ', merged));
+    }
+
+    private static bool AreNearOcrTokens(string first, string second)
+    {
+        var left = new string(first.Where(char.IsLetterOrDigit).ToArray());
+        var right = new string(second.Where(char.IsLetterOrDigit).ToArray());
+        if (left.Equals(right, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (left.Length != right.Length || left.Length == 0)
+        {
+            return false;
+        }
+
+        var differences = left
+            .Zip(right)
+            .Count(pair => char.ToUpperInvariant(pair.First) != char.ToUpperInvariant(pair.Second));
+        return differences == 1;
+    }
+
+    private static bool IsCjkCharacter(char character) =>
+        character is >= '\u3400' and <= '\u9FFF';
 
     private static bool IsLikelyLeadingGraphicArtifact(string token)
     {

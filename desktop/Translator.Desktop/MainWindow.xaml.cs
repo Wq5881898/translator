@@ -29,7 +29,8 @@ public partial class MainWindow : Window
 
             StatusText.Text = "Running packaged English OCR…";
             var result = await _ocr.RecognizeAsync(image, CancellationToken.None);
-            var cleanedText = TextRules.CleanEnglishOcrArtifacts(result.Text);
+            var cleanedText = TextRules.CleanEnglishOcrArtifacts(
+                TextRules.ExtractEnglishOcrContent(result.Text));
             var assessment = TextRules.AssessEnglishOcr(cleanedText, result.Confidence);
             if (!assessment.IsReliable)
             {

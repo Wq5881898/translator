@@ -20,6 +20,26 @@ if (args is ["--image", var imagePath])
     return string.IsNullOrWhiteSpace(result.Text) ? 1 : 0;
 }
 
+if (args is ["--image-crop", var sourcePath, var xText, var yText, var widthText, var heightText])
+{
+    using var source = new Bitmap(sourcePath);
+    var cropBounds = new Rectangle(
+        int.Parse(xText),
+        int.Parse(yText),
+        int.Parse(widthText),
+        int.Parse(heightText));
+    using var cropped = source.Clone(cropBounds, source.PixelFormat);
+    await using var image = new MemoryStream();
+    cropped.Save(image, System.Drawing.Imaging.ImageFormat.Png);
+    image.Position = 0;
+    var provider = new EnglishOcrProvider();
+    var result = await provider.RecognizeAsync(image, CancellationToken.None);
+    Console.WriteLine($"Raw: {result.Text}");
+    Console.WriteLine($"English: {TextRules.CleanEnglishOcrArtifacts(TextRules.ExtractEnglishOcrContent(result.Text))}");
+    Console.WriteLine($"Confidence: {result.Confidence:P0}");
+    return 0;
+}
+
 if (args is ["--capture-window", var titleFragment])
 {
     var windowBounds = FindVisibleWindow(titleFragment)
@@ -66,6 +86,18 @@ static Task ValidateTextRulesAsync()
         "An icon-only pseudo-word was accepted.");
     Assert(TextRules.AssessEnglishOcr("Translator.Desktop.exe", 0.80f).IsReliable,
         "A valid file name was rejected.");
+    Assert(TextRules.ExtractEnglishOcrContent("技术检查 7/7，GitHub CI 通过。") == "7/7 GitHub CI",
+        "English was not extracted from mixed Chinese text.");
+    Assert(TextRules.AssessEnglishOcr("技术检查 7/7，GitHub CI 通过。", 0.80f).IsReliable,
+        "English in mixed Chinese text was rejected.");
+    Assert(!TextRules.AssessEnglishOcr("已处理 4m 58s >", 0.90f).IsReliable,
+        "A Chinese status containing only time units was accepted as English.");
+    Assert(TextRules.MergeEnglishFromBilingualOcr(
+            "GitHub CI iat,",
+            "GitHub Cl 通过。") == "GitHub CI",
+        "English-only and bilingual OCR results were not reconciled.");
+    Assert(TextRules.CleanEnglishOcrArtifacts("GitHub Cl") == "GitHub CI",
+        "A likely technical acronym I/l confusion was not corrected.");
     return Task.CompletedTask;
 }
 static async Task ValidateMockAsync()
@@ -113,7 +145,7 @@ static async Task ValidatePackagedEnglishOcrAsync()
     var health = await provider.CheckHealthAsync(CancellationToken.None);
     Assert(health.IsAvailable, health.Message);
     var result = await provider.RecognizeAsync(stream, CancellationToken.None);
-    Assert(result.Provider == "packaged-english-ocr", $"Unexpected OCR provider: {result.Provider}");
+    Assert(result.Provider == "packaged-bilingual-ocr", $"Unexpected OCR provider: {result.Provider}");
     Assert(result.Text.Contains("Translator local OCR", StringComparison.Ordinal),
         $"Unexpected OCR result: {result.Text}");
     Assert(TextRules.AssessEnglishOcr(result.Text, result.Confidence).IsReliable,

@@ -14,15 +14,16 @@ public sealed class PackagedEnglishOcrProvider : IOcrProvider
         _dataPath = dataPath ?? Path.Combine(AppContext.BaseDirectory, "tessdata");
     }
 
-    public string Id => "packaged-english-ocr";
+    public string Id => "packaged-bilingual-ocr";
 
     public Task<ProviderHealth> CheckHealthAsync(CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
-        var modelPath = Path.Combine(_dataPath, "eng.traineddata");
-        return Task.FromResult(File.Exists(modelPath)
-            ? new ProviderHealth(true, "Packaged English OCR is ready.")
-            : new ProviderHealth(false, "The packaged English OCR model is missing."));
+        var englishModel = Path.Combine(_dataPath, "eng.traineddata");
+        var chineseModel = Path.Combine(_dataPath, "chi_sim.traineddata");
+        return Task.FromResult(File.Exists(englishModel) && File.Exists(chineseModel)
+            ? new ProviderHealth(true, "Packaged English and Simplified Chinese OCR models are ready.")
+            : new ProviderHealth(false, "A packaged bilingual OCR model is missing."));
     }
 
     public async Task<Translator.Core.OcrResult> RecognizeAsync(Stream imageStream, CancellationToken token)
@@ -39,14 +40,23 @@ public sealed class PackagedEnglishOcrProvider : IOcrProvider
         token.ThrowIfCancellationRequested();
 
         var watch = Stopwatch.StartNew();
-        using var engine = new TesseractEngine(_dataPath, "eng", EngineMode.LstmOnly);
-        engine.SetVariable("preserve_interword_spaces", "1");
         using var image = Pix.LoadFromMemory(buffer.ToArray());
-        using var page = engine.Process(image, PageSegMode.Auto);
-        var text = TextRules.Normalize(page.GetText());
-        var confidence = page.GetMeanConfidence();
+        var english = Recognize(image, "eng");
+        var bilingual = Recognize(image, "eng+chi_sim");
+        var text = TextRules.MergeEnglishFromBilingualOcr(english.Text, bilingual.Text);
+        var confidence = bilingual.Text.Any(character => character is >= '\u3400' and <= '\u9FFF')
+            ? bilingual.Confidence
+            : english.Confidence;
         watch.Stop();
 
         return new Translator.Core.OcrResult(text, watch.Elapsed, Id, confidence);
+    }
+
+    private (string Text, float Confidence) Recognize(Pix image, string languages)
+    {
+        using var engine = new TesseractEngine(_dataPath, languages, EngineMode.LstmOnly);
+        engine.SetVariable("preserve_interword_spaces", "1");
+        using var page = engine.Process(image, PageSegMode.Auto);
+        return (TextRules.Normalize(page.GetText()), page.GetMeanConfidence());
     }
 }
