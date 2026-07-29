@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react';
 
+import { FAVORITES_STORAGE_KEY } from '../../src/core/favorites';
 import {
   normalizeSettings,
   TRANSLATOR_SETTINGS_KEY,
@@ -15,6 +16,7 @@ const EMPTY_SETTINGS: TranslatorSettings = {
 
 export function App() {
   const [settings, setSettings] = useState(EMPTY_SETTINGS);
+  const [clearArmed, setClearArmed] = useState(false);
   const [status, setStatus] = useState(
     'US English pronunciation is active. Chrome local translation is the default.',
   );
@@ -22,22 +24,29 @@ export function App() {
   useEffect(() => {
     let active = true;
 
-    void browser.storage.local.get(TRANSLATOR_SETTINGS_KEY).then((stored) => {
-      if (!active) {
-        return;
-      }
+    void browser.storage.local
+      .get(TRANSLATOR_SETTINGS_KEY)
+      .then((stored) => {
+        if (!active) {
+          return;
+        }
 
-      const saved = stored[TRANSLATOR_SETTINGS_KEY] as
-        | Partial<TranslatorSettings>
-        | undefined;
-      if (saved) {
-        const normalized = normalizeSettings(saved);
-        setSettings(normalized);
-        setStatus(
-          `${normalized.pronunciationLanguage === 'en-GB' ? 'UK' : 'US'} English pronunciation loaded locally`,
-        );
-      }
-    });
+        const saved = stored[TRANSLATOR_SETTINGS_KEY] as
+          | Partial<TranslatorSettings>
+          | undefined;
+        if (saved) {
+          const normalized = normalizeSettings(saved);
+          setSettings(normalized);
+          setStatus(
+            `${normalized.pronunciationLanguage === 'en-GB' ? 'UK' : 'US'} English pronunciation loaded locally`,
+          );
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setStatus('Settings could not be read. Reload this page and try again.');
+        }
+      });
 
     return () => {
       active = false;
@@ -56,22 +65,46 @@ export function App() {
       return;
     }
 
-    await browser.storage.local.set({
-      [TRANSLATOR_SETTINGS_KEY]: normalized,
-    });
-    setSettings(normalized);
-    setStatus(
-      `${normalized.pronunciationLanguage === 'en-GB' ? 'UK' : 'US'} English pronunciation saved locally. Closing…`,
-    );
-    window.setTimeout(() => window.close(), 700);
+    try {
+      await browser.storage.local.set({
+        [TRANSLATOR_SETTINGS_KEY]: normalized,
+      });
+      setSettings(normalized);
+      setStatus(
+        `${normalized.pronunciationLanguage === 'en-GB' ? 'UK' : 'US'} English pronunciation saved locally. Closing…`,
+      );
+      window.setTimeout(() => window.close(), 700);
+    } catch {
+      setStatus('Settings could not be saved. Check Chrome storage and try again.');
+    }
+  }
+
+  async function clearLocalData() {
+    if (!clearArmed) {
+      setClearArmed(true);
+      setStatus('Click “Confirm clear local data” to permanently remove settings and favorites.');
+      return;
+    }
+
+    try {
+      await browser.storage.local.remove([
+        TRANSLATOR_SETTINGS_KEY,
+        FAVORITES_STORAGE_KEY,
+      ]);
+      setSettings(EMPTY_SETTINGS);
+      setClearArmed(false);
+      setStatus('Local settings and favorites were cleared.');
+    } catch {
+      setStatus('Local data could not be cleared. Reload this page and try again.');
+    }
   }
 
   return (
     <main>
-      <p className="eyebrow">Milestone 5</p>
+      <p className="eyebrow">Stage 1 release candidate</p>
       <h1>Translator settings</h1>
       <p className="intro">
-        Pronunciation and preferences stay in this browser. Translation runs locally in Chrome by default.
+        Pronunciation, settings, and favorites stay in this browser. Translation runs locally in Chrome by default.
       </p>
 
       <form onSubmit={saveSettings}>
@@ -120,6 +153,9 @@ export function App() {
             }
           />
         </label>
+        <p className="notice">
+          Azure is optional. Its key is saved only in Chrome extension storage, but it is not encrypted by Translator. Leave it blank and keep fallback off if you do not need it.
+        </p>
 
         <label>
           Optional Azure region
@@ -139,6 +175,25 @@ export function App() {
         <button type="submit">Save settings</button>
         <output aria-live="polite">{status}</output>
       </form>
+
+      <section className="privacy-card">
+        <h2>Privacy and local data</h2>
+        <p>
+          Translator does not upload favorites, settings, browsing history, complete webpages, screenshots, or audio. Azure receives selected English text only when you explicitly enable it and Chrome local translation fails.
+        </p>
+        <button
+          className={clearArmed ? 'danger armed' : 'danger'}
+          type="button"
+          onClick={() => void clearLocalData()}
+        >
+          {clearArmed ? 'Confirm clear local data' : 'Clear local data'}
+        </button>
+        {clearArmed ? (
+          <button className="secondary" type="button" onClick={() => setClearArmed(false)}>
+            Cancel
+          </button>
+        ) : null}
+      </section>
     </main>
   );
 }
