@@ -95,9 +95,10 @@ export function parseFavoritesCsv(text: string): FavoriteEntry[] {
 
   const unique = new Map<string, FavoriteEntry>();
 
-  for (const row of rows) {
+  for (const [index, row] of rows.entries()) {
+    const csvRowNumber = index + 2;
     if (row.length !== CSV_HEADERS.length) {
-      throw new Error('A CSV row has the wrong number of columns.');
+      throw new Error(`CSV row ${csvRowNumber} has the wrong number of columns.`);
     }
 
     const [
@@ -119,7 +120,9 @@ export function parseFavoritesCsv(text: string): FavoriteEntry[] {
       !firstFavoritedAt ||
       Number.isNaN(Date.parse(firstFavoritedAt))
     ) {
-      throw new Error('The CSV contains an invalid favorite row.');
+      throw new Error(
+        `CSV row ${csvRowNumber} is invalid. Type, English, Chinese translation, and First saved are required.`,
+      );
     }
 
     const phonetic = rawPhonetic.trim();

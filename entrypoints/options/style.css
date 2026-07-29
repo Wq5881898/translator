@@ -33,13 +33,21 @@ h1 {
   margin: 8px 0;
 }
 
-.intro {
+h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.intro,
+.notice,
+.privacy-card p {
   color: #47564c;
   line-height: 1.6;
 }
 
 form,
-label {
+label,
+.privacy-card {
   display: grid;
   gap: 8px;
 }
@@ -82,4 +90,37 @@ button {
 output {
   color: #246b45;
   min-height: 24px;
+}
+
+.notice {
+  margin: -10px 0 0;
+  font-size: 13px;
+}
+
+.privacy-card {
+  gap: 12px;
+  margin-top: 28px;
+  border-top: 1px solid #dce5dd;
+  padding-top: 24px;
+}
+
+.privacy-card p {
+  margin: 0;
+}
+
+.secondary {
+  color: #246b45;
+  border: 1px solid #b9d5c3;
+  background: transparent;
+}
+
+.danger {
+  color: #8b3428;
+  border: 1px solid #e7c3bd;
+  background: transparent;
+}
+
+.danger.armed {
+  color: white;
+  background: #8b3428;
 }

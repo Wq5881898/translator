@@ -40,7 +40,20 @@ describe('favorites CSV transfer', () => {
       parseFavoritesCsv(
         'Type,English,Phonetic,Chinese translation,First saved\nword,hello,,你好,not-a-date',
       ),
-    ).toThrow('invalid favorite row');
+    ).toThrow('CSV row 2 is invalid');
+  });
+
+  it('identifies the edited row when First saved is missing', () => {
+    const editedCsv =
+      'Type,English,Phonetic,Chinese translation,First saved\n' +
+      'sentence,read more abo,,阅读更多 ABO,2026-07-29T02:42:33.626Z\n' +
+      'sentence,We do not offer this definition as,,我们不提供此定义为,2026-07-29T02:42:30.777Z\n' +
+      'sentence,Merriam-Webster’s Great Big List of Words You Love to Hate,,Merriam-Webster 的一大堆你喜欢讨厌的词,2026-07-29T02:42:27.574Z\n' +
+      'word,baby,,娃娃,\n';
+
+    expect(() => parseFavoritesCsv(editedCsv)).toThrow(
+      'CSV row 5 is invalid. Type, English, Chinese translation, and First saved are required.',
+    );
   });
 
   it('normalizes imported ids and removes duplicates', () => {

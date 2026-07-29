@@ -13,9 +13,20 @@ type Props = {
   onStatus(message: string, isError?: boolean): void;
 };
 
+type ImportStatus = {
+  message: string;
+  isError: boolean;
+};
+
 export function FavoritesTransferControls({ favorites, onImport, onStatus }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [importStatus, setImportStatus] = useState<ImportStatus>();
+
+  function reportStatus(message: string, isError = false) {
+    setImportStatus({ message, isError });
+    onStatus(message, isError);
+  }
 
   function exportFavorites() {
     const blob = new Blob([serializeFavoritesCsv(favorites)], {
@@ -28,7 +39,7 @@ export function FavoritesTransferControls({ favorites, onImport, onStatus }: Pro
     link.download = `translator-favorites-${date}.csv`;
     link.click();
     URL.revokeObjectURL(url);
-    onStatus(`Exported ${favorites.length} favorites to CSV`);
+    reportStatus(`Exported ${favorites.length} favorites to CSV`);
   }
 
   async function importFavorites(event: ChangeEvent<HTMLInputElement>) {
@@ -39,18 +50,19 @@ export function FavoritesTransferControls({ favorites, onImport, onStatus }: Pro
     }
 
     setBusy(true);
+    setImportStatus({ message: `Importing ${file.name}…`, isError: false });
     try {
       const imported = parseFavoritesCsv(await file.text());
       const merged = mergeFavorites(favorites, imported);
       const added = merged.length - favorites.length;
       await onImport(merged);
-      onStatus(
+      reportStatus(
         added > 0
           ? `Imported ${added} new favorites from CSV`
           : 'Import complete; no new favorites found',
       );
     } catch (error) {
-      onStatus(
+      reportStatus(
         error instanceof Error ? error.message : 'Favorites import failed.',
         true,
       );
@@ -60,30 +72,40 @@ export function FavoritesTransferControls({ favorites, onImport, onStatus }: Pro
   }
 
   return (
-    <div className="favorites-transfer">
-      <button
-        className="secondary"
-        type="button"
-        disabled={busy}
-        onClick={exportFavorites}
-      >
-        Export CSV
-      </button>
-      <button
-        className="secondary"
-        type="button"
-        disabled={busy}
-        onClick={() => inputRef.current?.click()}
-      >
-        {busy ? 'Importing…' : 'Import CSV'}
-      </button>
-      <input
-        ref={inputRef}
-        className="visually-hidden"
-        type="file"
-        accept="text/csv,.csv"
-        onChange={(event) => void importFavorites(event)}
-      />
+    <div className="favorites-transfer-section">
+      <div className="favorites-transfer">
+        <button
+          className="secondary"
+          type="button"
+          disabled={busy}
+          onClick={exportFavorites}
+        >
+          Export CSV
+        </button>
+        <button
+          className="secondary"
+          type="button"
+          disabled={busy}
+          onClick={() => inputRef.current?.click()}
+        >
+          {busy ? 'Importing…' : 'Import CSV'}
+        </button>
+        <input
+          ref={inputRef}
+          className="visually-hidden"
+          type="file"
+          accept="text/csv,.csv"
+          onChange={(event) => void importFavorites(event)}
+        />
+      </div>
+      {importStatus ? (
+        <output
+          className={`import-status${importStatus.isError ? ' error' : ''}`}
+          aria-live="polite"
+        >
+          {importStatus.message}
+        </output>
+      ) : null}
     </div>
   );
 }

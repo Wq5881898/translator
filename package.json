@@ -1,8 +1,9 @@
 {
   "name": "translator-extension",
-  "version": "0.7.0",
+  "version": "1.0.0-rc.1",
   "private": true,
-  "description": "A lightweight English-learning translation extension.",
+  "description": "A lightweight local-first English-learning translation extension.",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "wxt",
@@ -10,6 +11,7 @@
     "check": "npm run typecheck && npm test",
     "typecheck": "wxt prepare && tsc --noEmit",
     "test": "vitest run",
+    "verify:release": "node scripts/verify-release.mjs",
     "postinstall": "wxt prepare"
   },
   "dependencies": {

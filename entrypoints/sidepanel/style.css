@@ -319,6 +319,11 @@ time {
   background: #e7ede8;
 }
 
+.favorites-transfer-section {
+  display: grid;
+  gap: 8px;
+}
+
 .favorites-transfer {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -328,6 +333,22 @@ time {
 .favorites-transfer button {
   padding: 8px 10px;
   font-size: 12px;
+}
+
+.import-status {
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #246b45;
+  background: #eaf4ed;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.import-status.error {
+  color: #8b3428;
+  background: #fff0ed;
 }
 
 .visually-hidden {

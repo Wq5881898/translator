@@ -1,5 +1,9 @@
 import type { TranslatorSettings } from '../core/settings';
 import {
+  validateEnglishTranslationInput,
+  withTimeout,
+} from '../core/translation-guard';
+import {
   classifyText,
   type TranslationProvider,
   type TranslationRequest,
@@ -38,15 +42,17 @@ async function azureRequest<T>(
   settings: AzureSettings,
   fetcher: FetchLike,
 ): Promise<T> {
-  const response = await fetcher(`${AZURE_ENDPOINT}${path}`, {
-    method: 'POST',
-    headers: headers(settings),
-    body: JSON.stringify([{ Text: text }]),
-  });
+  const response = await withTimeout(
+    fetcher(`${AZURE_ENDPOINT}${path}`, {
+      method: 'POST',
+      headers: headers(settings),
+      body: JSON.stringify([{ Text: text }]),
+    }),
+  );
 
   if (!response.ok) {
     if (response.status === 401) {
-      throw new Error('Azure rejected the key or region.');
+      throw new Error('Azure rejected the key or region. Open settings and check both values.');
     }
 
     if (response.status === 403) {
@@ -57,7 +63,7 @@ async function azureRequest<T>(
       throw new Error('Azure request limit reached. Try again shortly.');
     }
 
-    throw new Error(`Azure translation failed (HTTP ${response.status}).`);
+    throw new Error(`Azure translation failed (HTTP ${response.status}). Try again.`);
   }
 
   return (await response.json()) as T;
@@ -77,7 +83,7 @@ async function translateText(
   const translatedText = response[0]?.translations?.[0]?.text?.trim();
 
   if (!translatedText) {
-    throw new Error('Azure returned an empty translation.');
+    throw new Error('Azure returned an empty translation. Try again.');
   }
 
   return translatedText;
@@ -107,12 +113,7 @@ export function createAzureTranslationProvider(
 ): TranslationProvider {
   return {
     async translate(request: TranslationRequest): Promise<TranslationResult> {
-      const text = request.text.trim();
-
-      if (!text) {
-        throw new Error('Text is required.');
-      }
-
+      const text = validateEnglishTranslationInput(request.text);
       const textKind = classifyText(text);
 
       if (textKind !== 'word') {
@@ -126,7 +127,11 @@ export function createAzureTranslationProvider(
 
       const [dictionaryResult, phoneticResult] = await Promise.allSettled([
         lookupWord(text, settings, fetcher),
-        fetchEnglishPhonetic(text, fetcher),
+        withTimeout(
+          fetchEnglishPhonetic(text, fetcher),
+          8_000,
+          'Dictionary lookup timed out.',
+        ),
       ]);
       const alternatives =
         dictionaryResult.status === 'fulfilled' ? dictionaryResult.value : [];

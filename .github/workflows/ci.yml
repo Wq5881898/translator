@@ -32,10 +32,13 @@ jobs:
       - name: Build extension
         run: npm run build
 
-      - name: Upload test extension
+      - name: Verify release artifact
+        run: npm run verify:release
+
+      - name: Upload Stage 1 release candidate
         uses: actions/upload-artifact@v4
         with:
-          name: translator-m06-${{ github.sha }}
+          name: translator-stage1-rc-${{ github.sha }}
           path: .output/chrome-mv3/
           include-hidden-files: true
           if-no-files-found: error
