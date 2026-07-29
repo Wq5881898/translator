@@ -39,6 +39,8 @@ jobs:
           dotnet publish desktop/Translator.BridgeHost --configuration Release --runtime win-x64 --self-contained true --output staging/bridge-host --configfile NuGet.Config
           Copy-Item desktop/bridge staging/bridge -Recurse
           Copy-Item docs/stage-2/BATCH_A_TEST_GUIDE_ZH.md staging/
+          Copy-Item docs/stage-2/BATCH_A_OCR_FIX_REPORT_ZH.md staging/
+          Copy-Item THIRD_PARTY_NOTICES.md staging/
           Copy-Item .output/chrome-mv3 staging/extension -Recurse
       - uses: actions/upload-artifact@v4
         with:

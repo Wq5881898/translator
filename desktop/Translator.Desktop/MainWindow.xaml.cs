@@ -6,7 +6,7 @@ namespace Translator.Desktop;
 public partial class MainWindow : Window
 {
     private readonly MockTranslationProvider _mock = new();
-    private readonly WindowsOcrProvider _ocr = new();
+    private readonly EnglishOcrProvider _ocr = new();
 
     public MainWindow() => InitializeComponent();
 
@@ -19,9 +19,15 @@ public partial class MainWindow : Window
         {
             await Task.Delay(150);
             using var image = ScreenRegionCapture.CaptureWithOverlay();
-            Show(); Activate();
-            if (image is null) { StatusText.Text = "Capture cancelled. No image was saved."; return; }
-            StatusText.Text = "Running local OCR…";
+            Show();
+            Activate();
+            if (image is null)
+            {
+                StatusText.Text = "Capture cancelled. No image was saved.";
+                return;
+            }
+
+            StatusText.Text = "Running packaged English OCR…";
             var result = await _ocr.RecognizeAsync(image, CancellationToken.None);
             RecognizedText.Text = result.Text;
             if (string.IsNullOrWhiteSpace(result.Text) ||
@@ -33,14 +39,18 @@ public partial class MainWindow : Window
             }
 
             StatusText.Text =
-                $"English OCR completed in {result.Duration.TotalMilliseconds:F0} ms. The in-memory image has been disposed.";
+                $"English OCR completed in {result.Duration.TotalMilliseconds:F0} ms using {result.Provider}. The in-memory image has been disposed.";
         }
         catch (Exception exception)
         {
-            Show(); Activate();
+            Show();
+            Activate();
             StatusText.Text = $"OCR validation failed: {exception.Message}";
         }
-        finally { SetBusy(false); }
+        finally
+        {
+            SetBusy(false);
+        }
     }
 
     private async void MockButton_Click(object sender, RoutedEventArgs e)
@@ -48,16 +58,28 @@ public partial class MainWindow : Window
         SetBusy(true, "Running mock translation…");
         try
         {
-            var result = await _mock.TranslateAsync(new TranslationRequest(Guid.NewGuid().ToString("N"), RecognizedText.Text), CancellationToken.None);
+            var result = await _mock.TranslateAsync(
+                new TranslationRequest(Guid.NewGuid().ToString("N"), RecognizedText.Text),
+                CancellationToken.None);
             StatusText.Text = $"{result.TranslatedText} · type: {result.TextKind} · provider: {result.Provider}";
         }
-        catch (Exception exception) { StatusText.Text = $"Mock translation failed: {exception.Message}"; }
-        finally { SetBusy(false); }
+        catch (Exception exception)
+        {
+            StatusText.Text = $"Mock translation failed: {exception.Message}";
+        }
+        finally
+        {
+            SetBusy(false);
+        }
     }
 
     private void SetBusy(bool busy, string? status = null)
     {
-        CaptureButton.IsEnabled = !busy; MockButton.IsEnabled = !busy;
-        if (status is not null) StatusText.Text = status;
+        CaptureButton.IsEnabled = !busy;
+        MockButton.IsEnabled = !busy;
+        if (status is not null)
+        {
+            StatusText.Text = status;
+        }
     }
 }

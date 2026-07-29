@@ -9,7 +9,18 @@ Translator uses open-source software. The repository's installed dependency tree
 - TypeScript — Microsoft Corporation — Apache License 2.0.
 - Vitest — Vitest contributors — MIT License.
 
-These packages include transitive dependencies under their respective licenses. Their license texts and package metadata are distributed through the installed npm packages.
+Additional desktop OCR dependencies:
+
+- Tesseract .NET wrapper 5.2.0 — Charles Weld and contributors — Apache License 2.0.
+- Tesseract OCR engine — Tesseract contributors — Apache License 2.0.
+- `tessdata_fast/eng.traineddata` — Tesseract contributors — Apache License 2.0.
+
+The packaged English model is sourced from
+`https://github.com/tesseract-ocr/tessdata_fast/blob/main/eng.traineddata`.
+Its SHA-256 is
+`7D4322BD2A7749724879683FC3912CB542F19906C83BCC1A52132556427170B2`.
+
+These packages include transitive dependencies under their respective licenses. Their license texts and package metadata are distributed through the installed packages.
 
 ## External platform services
 

@@ -14,7 +14,7 @@ using Translator.Desktop;
 if (args is ["--image", var imagePath])
 {
     await using var image = File.OpenRead(imagePath);
-    var provider = new WindowsOcrProvider();
+    var provider = new EnglishOcrProvider();
     var result = await provider.RecognizeAsync(image, CancellationToken.None);
     Console.WriteLine(result.Text);
     return string.IsNullOrWhiteSpace(result.Text) ? 1 : 0;
@@ -38,6 +38,7 @@ var checks = new (string Name, Func<Task> Run)[]
     ("mock provider", ValidateMockAsync),
     ("native frame UTF-8 round-trip", ValidateFramingAsync),
     ("invalid native frame rejection", ValidateInvalidLengthAsync),
+    ("packaged English OCR on in-memory image", ValidatePackagedEnglishOcrAsync),
     ("Windows local OCR on in-memory image", ValidateWindowsOcrAsync),
 };
 var failed = 0;
@@ -82,21 +83,7 @@ static async Task ValidateInvalidLengthAsync()
 }
 static async Task ValidateWindowsOcrAsync()
 {
-    var visual = new DrawingVisual();
-    using (var drawing = visual.RenderOpen())
-    {
-        drawing.DrawRectangle(System.Windows.Media.Brushes.White, null, new Rect(0, 0, 900, 180));
-        var text = new FormattedText("Translator local OCR", CultureInfo.GetCultureInfo("en-US"),
-            System.Windows.FlowDirection.LeftToRight, new Typeface("Arial"), 54, System.Windows.Media.Brushes.Black, 1);
-        drawing.DrawText(text, new System.Windows.Point(20, 45));
-    }
-    var bitmap = new RenderTargetBitmap(900, 180, 96, 96, PixelFormats.Pbgra32);
-    bitmap.Render(visual);
-    await using var stream = new MemoryStream();
-    var encoder = new PngBitmapEncoder();
-    encoder.Frames.Add(BitmapFrame.Create(bitmap));
-    encoder.Save(stream);
-    stream.Position = 0;
+    await using var stream = CreateEnglishTestImage();
     var provider = new WindowsOcrProvider();
     var health = await provider.CheckHealthAsync(CancellationToken.None);
     Assert(health.IsAvailable, health.Message);
@@ -107,6 +94,36 @@ static async Task ValidateWindowsOcrAsync()
         Assert(result.Text.Contains("local OCR", StringComparison.OrdinalIgnoreCase),
             $"Unexpected OCR result on attempt {attempt}: {result.Text}");
     }
+}
+static async Task ValidatePackagedEnglishOcrAsync()
+{
+    await using var stream = CreateEnglishTestImage();
+    var provider = new PackagedEnglishOcrProvider();
+    var health = await provider.CheckHealthAsync(CancellationToken.None);
+    Assert(health.IsAvailable, health.Message);
+    var result = await provider.RecognizeAsync(stream, CancellationToken.None);
+    Assert(result.Provider == "packaged-english-ocr", $"Unexpected OCR provider: {result.Provider}");
+    Assert(result.Text.Contains("Translator local OCR", StringComparison.Ordinal),
+        $"Unexpected OCR result: {result.Text}");
+}
+static MemoryStream CreateEnglishTestImage()
+{
+    var visual = new DrawingVisual();
+    using (var drawing = visual.RenderOpen())
+    {
+        drawing.DrawRectangle(System.Windows.Media.Brushes.White, null, new Rect(0, 0, 900, 180));
+        var text = new FormattedText("Translator local OCR", CultureInfo.GetCultureInfo("en-US"),
+            System.Windows.FlowDirection.LeftToRight, new Typeface("Arial"), 54, System.Windows.Media.Brushes.Black, 1);
+        drawing.DrawText(text, new System.Windows.Point(20, 45));
+    }
+    var bitmap = new RenderTargetBitmap(900, 180, 96, 96, PixelFormats.Pbgra32);
+    bitmap.Render(visual);
+    var stream = new MemoryStream();
+    var encoder = new PngBitmapEncoder();
+    encoder.Frames.Add(BitmapFrame.Create(bitmap));
+    encoder.Save(stream);
+    stream.Position = 0;
+    return stream;
 }
 static void Assert(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
 
