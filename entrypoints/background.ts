@@ -7,7 +7,11 @@ import {
 } from '../src/core/messages';
 import { normalizeSelection } from '../src/core/selection';
 import { mockTranslationProvider } from '../src/providers/mock-translation-provider';
-import { checkStage2NativeHost } from '../src/core/stage2-bridge';
+import {
+  checkStage2NativeHost,
+  registerStage2OffscreenPort,
+  startStage2NativeBridge,
+} from '../src/core/stage2-bridge';
 
 const LATEST_TRANSLATION_KEY = 'latestSelectionTranslation';
 
@@ -42,6 +46,12 @@ async function captureSelection(
 }
 
 export default defineBackground(() => {
+  browser.runtime.onConnect.addListener((port) => {
+    registerStage2OffscreenPort(port);
+  });
+  startStage2NativeBridge();
+  browser.runtime.onStartup.addListener(startStage2NativeBridge);
+
   browser.runtime.onInstalled.addListener(() => {
     browser.contextMenus.create({
       id: 'translator-open-side-panel',

@@ -128,3 +128,22 @@ GitHub CI 通过。  → GitHub CI
 4. 错误必须显示在用户当前操作窗口；
 5. 每个批次保持独立分支、测试报告和可下载产物；
 6. 第一阶段插件继续可以脱离桌面程序独立运行。
+
+## 6. 第二批次桥接安装与诊断补充
+
+Chrome 在 Windows 上从以下注册表键的“默认值”读取 Native Messaging 清单路径：
+
+```text
+HKCU\Software\Google\Chrome\NativeMessagingHosts\com.wq5881898.translator.stage2
+```
+
+PowerShell Registry Provider 中，名为 `(default)` 的属性并不等于注册表默认值。安装脚本必须使用 `Set-Item -Value` 写入真正的默认值，并在退出前通过 `GetValue("")` 回读验证。发布 CI 还要解析生成的 JSON 清单，检查 Host 绝对路径和精确扩展来源。
+
+桌面端开始翻译前先执行最长约 4 秒的桥接健康检查：
+
+- 桥接未注册、扩展未加载或 Chrome 未启动时，立即显示具体恢复步骤；
+- 健康检查通过后才发送正文；
+- 首次语言包准备和真实翻译有独立超时；
+- 任一层断开都必须在当前桌面窗口结束等待并显示错误，不能无限保持“正在发送”。
+
+本规则来自第二批首次人工测试暴露的问题：模拟 Host 回包测试虽然通过，但未验证 Windows 注册表默认值，也没有验证真实 Chrome 中是否加载了固定 ID 扩展。

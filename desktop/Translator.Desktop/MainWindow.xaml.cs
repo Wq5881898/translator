@@ -5,7 +5,7 @@ namespace Translator.Desktop;
 
 public partial class MainWindow : Window
 {
-    private readonly MockTranslationProvider _mock = new();
+    private readonly BrowserBridgeTranslationProvider _translation = new();
     private readonly EnglishOcrProvider _ocr = new();
 
     public MainWindow() => InitializeComponent();
@@ -13,6 +13,7 @@ public partial class MainWindow : Window
     private async void CaptureButton_Click(object sender, RoutedEventArgs e)
     {
         RecognizedText.Clear();
+        TranslatedText.Clear();
         SetBusy(true, "Select a region. Press Esc to cancel.");
         Hide();
         try
@@ -61,19 +62,33 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void MockButton_Click(object sender, RoutedEventArgs e)
+    private async void TranslateButton_Click(object sender, RoutedEventArgs e)
     {
-        SetBusy(true, "Running mock translation…");
+        TranslatedText.Clear();
+        SetBusy(true, "Checking the Chrome translation bridge...");
         try
         {
-            var result = await _mock.TranslateAsync(
+            var health = await _translation.CheckHealthAsync(CancellationToken.None);
+            if (!health.IsAvailable)
+            {
+                StatusText.Text =
+                    $"Translation could not start: {health.Message} " +
+                    "Run bridge\\install-bridge.ps1, fully restart Chrome, and retry.";
+                return;
+            }
+
+            StatusText.Text =
+                "Chrome bridge connected. Translating locally; first-time language-pack setup may take up to 35 seconds...";
+            var result = await _translation.TranslateAsync(
                 new TranslationRequest(Guid.NewGuid().ToString("N"), RecognizedText.Text),
                 CancellationToken.None);
-            StatusText.Text = $"{result.TranslatedText} · type: {result.TextKind} · provider: {result.Provider}";
+            TranslatedText.Text = result.TranslatedText;
+            StatusText.Text =
+                $"Translation completed using {result.Provider}. Type: {result.TextKind}.";
         }
         catch (Exception exception)
         {
-            StatusText.Text = $"Mock translation failed: {exception.Message}";
+            StatusText.Text = $"Translation failed: {exception.Message}";
         }
         finally
         {
@@ -84,7 +99,7 @@ public partial class MainWindow : Window
     private void SetBusy(bool busy, string? status = null)
     {
         CaptureButton.IsEnabled = !busy;
-        MockButton.IsEnabled = !busy;
+        TranslateButton.IsEnabled = !busy;
         if (status is not null)
         {
             StatusText.Text = status;

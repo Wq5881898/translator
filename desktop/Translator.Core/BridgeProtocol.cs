@@ -7,6 +7,7 @@ public sealed record BridgeEnvelope(string ProtocolVersion, string MessageType, 
 {
     public const string CurrentVersion = "1.0";
     public const int MaximumNativeMessageBytes = 1_048_576;
+    public const string PipeName = "wq5881898.translator.stage2";
     public static BridgeEnvelope Create<T>(string type, string requestId, T payload) =>
         new(CurrentVersion, type, requestId, DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(payload));
 }
