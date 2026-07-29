@@ -39,6 +39,7 @@ var checks = new (string Name, Func<Task> Run)[]
     ("native frame UTF-8 round-trip", ValidateFramingAsync),
     ("invalid native frame rejection", ValidateInvalidLengthAsync),
     ("packaged English OCR on in-memory image", ValidatePackagedEnglishOcrAsync),
+    ("non-English OCR is rejected with a reason", ValidateNonEnglishOcrAsync),
     ("Windows local OCR on in-memory image", ValidateWindowsOcrAsync),
 };
 var failed = 0;
@@ -55,6 +56,10 @@ static Task ValidateTextRulesAsync()
     Assert(TextRules.Normalize("  Hello\r\n world ") == "Hello world", "Whitespace normalization failed.");
     Assert(TextRules.Classify("Hello") == TextKind.Word, "Word classification failed.");
     Assert(TextRules.Classify("Hello world.") == TextKind.Sentence, "Sentence classification failed.");
+    Assert(TextRules.AssessEnglishOcr("To learn English well.", 0.92f).IsReliable,
+        "Valid English OCR was rejected.");
+    Assert(!TextRules.AssessEnglishOcr("S O m e O n e", 0.40f).IsReliable,
+        "Low-confidence OCR gibberish was accepted.");
     return Task.CompletedTask;
 }
 static async Task ValidateMockAsync()
@@ -105,15 +110,30 @@ static async Task ValidatePackagedEnglishOcrAsync()
     Assert(result.Provider == "packaged-english-ocr", $"Unexpected OCR provider: {result.Provider}");
     Assert(result.Text.Contains("Translator local OCR", StringComparison.Ordinal),
         $"Unexpected OCR result: {result.Text}");
+    Assert(TextRules.AssessEnglishOcr(result.Text, result.Confidence).IsReliable,
+        $"Packaged OCR result was not considered reliable at {result.Confidence:P0}.");
+}
+static async Task ValidateNonEnglishOcrAsync()
+{
+    await using var stream = CreateTestImage("这是一个中文截图测试", "Microsoft YaHei UI");
+    var provider = new PackagedEnglishOcrProvider();
+    var result = await provider.RecognizeAsync(stream, CancellationToken.None);
+    var assessment = TextRules.AssessEnglishOcr(result.Text, result.Confidence);
+    Assert(!assessment.IsReliable,
+        $"Chinese image produced an accepted English result at {result.Confidence:P0}: {result.Text}");
 }
 static MemoryStream CreateEnglishTestImage()
+{
+    return CreateTestImage("Translator local OCR", "Arial");
+}
+static MemoryStream CreateTestImage(string content, string typeface)
 {
     var visual = new DrawingVisual();
     using (var drawing = visual.RenderOpen())
     {
         drawing.DrawRectangle(System.Windows.Media.Brushes.White, null, new Rect(0, 0, 900, 180));
-        var text = new FormattedText("Translator local OCR", CultureInfo.GetCultureInfo("en-US"),
-            System.Windows.FlowDirection.LeftToRight, new Typeface("Arial"), 54, System.Windows.Media.Brushes.Black, 1);
+        var text = new FormattedText(content, CultureInfo.GetCultureInfo("en-US"),
+            System.Windows.FlowDirection.LeftToRight, new Typeface(typeface), 54, System.Windows.Media.Brushes.Black, 1);
         drawing.DrawText(text, new System.Windows.Point(20, 45));
     }
     var bitmap = new RenderTargetBitmap(900, 180, 96, 96, PixelFormats.Pbgra32);

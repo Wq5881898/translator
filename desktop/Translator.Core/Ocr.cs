@@ -1,6 +1,10 @@
 namespace Translator.Core;
 
-public sealed record OcrResult(string Text, TimeSpan Duration, string Provider);
+public sealed record OcrResult(
+    string Text,
+    TimeSpan Duration,
+    string Provider,
+    float? Confidence = null);
 
 public interface IOcrProvider
 {

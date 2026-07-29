@@ -26,6 +26,57 @@ public static class TextRules
         return normalized;
     }
 
+    public static EnglishTextAssessment AssessEnglishOcr(string text, float? confidence = null)
+    {
+        var normalized = Normalize(text);
+        if (normalized.Length == 0)
+        {
+            return new EnglishTextAssessment(false, "No text was recognized.");
+        }
+
+        if (confidence is < 0.45f)
+        {
+            return new EnglishTextAssessment(
+                false,
+                $"The OCR confidence was only {confidence.Value:P0}.");
+        }
+
+        var letters = normalized.Where(IsLatinLetter).ToArray();
+        if (letters.Length < 2)
+        {
+            return new EnglishTextAssessment(false, "No reliable English letters were detected.");
+        }
+
+        var words = normalized
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(word => new string(word.Where(IsLatinLetter).ToArray()))
+            .Where(word => word.Length > 0)
+            .ToArray();
+        var suspiciousSingles = words.Count(word =>
+            word.Length == 1 &&
+            !word.Equals("a", StringComparison.OrdinalIgnoreCase) &&
+            !word.Equals("i", StringComparison.OrdinalIgnoreCase));
+        if (words.Length >= 4 && suspiciousSingles > Math.Max(1, words.Length / 3))
+        {
+            return new EnglishTextAssessment(false, "The result contains too many isolated letters.");
+        }
+
+        if (letters.Length >= 8)
+        {
+            var vowelCount = letters.Count(character =>
+                "aeiouyAEIOUY".Contains(character));
+            if ((double)vowelCount / letters.Length < 0.12)
+            {
+                return new EnglishTextAssessment(false, "The result does not look like English text.");
+            }
+        }
+
+        return new EnglishTextAssessment(true, "Reliable English text detected.");
+    }
+
+    private static bool IsLatinLetter(char character) =>
+        character is >= 'A' and <= 'Z' or >= 'a' and <= 'z';
+
     public static TextKind Classify(string text)
     {
         var words = Normalize(text).Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -33,6 +84,8 @@ public static class TextRules
         return words.Length <= 12 ? TextKind.Sentence : TextKind.Paragraph;
     }
 }
+
+public sealed record EnglishTextAssessment(bool IsReliable, string Message);
 
 public sealed class MockTranslationProvider : ITranslationProvider
 {

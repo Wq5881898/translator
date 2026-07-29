@@ -29,17 +29,23 @@ public partial class MainWindow : Window
 
             StatusText.Text = "Running packaged English OCR…";
             var result = await _ocr.RecognizeAsync(image, CancellationToken.None);
-            RecognizedText.Text = result.Text;
-            if (string.IsNullOrWhiteSpace(result.Text) ||
-                !result.Text.Any(character => character is >= 'A' and <= 'Z' or >= 'a' and <= 'z'))
+            var assessment = TextRules.AssessEnglishOcr(result.Text, result.Confidence);
+            if (!assessment.IsReliable)
             {
+                RecognizedText.Clear();
                 StatusText.Text =
-                    "No English text was recognized. Try a clearer or larger English region. You can capture again immediately.";
+                    $"No reliable English text was detected. {assessment.Message} " +
+                    "The possible non-English OCR output was ignored; select a clear English region and try again.";
                 return;
             }
 
+            RecognizedText.Text = result.Text;
+            var confidenceText = result.Confidence is null
+                ? string.Empty
+                : $" at {result.Confidence.Value:P0} confidence";
             StatusText.Text =
-                $"English OCR completed in {result.Duration.TotalMilliseconds:F0} ms using {result.Provider}. The in-memory image has been disposed.";
+                $"English OCR completed in {result.Duration.TotalMilliseconds:F0} ms using {result.Provider}{confidenceText}. " +
+                "The in-memory image has been disposed.";
         }
         catch (Exception exception)
         {

@@ -44,8 +44,9 @@ public sealed class PackagedEnglishOcrProvider : IOcrProvider
         using var image = Pix.LoadFromMemory(buffer.ToArray());
         using var page = engine.Process(image, PageSegMode.Auto);
         var text = TextRules.Normalize(page.GetText());
+        var confidence = page.GetMeanConfidence();
         watch.Stop();
 
-        return new Translator.Core.OcrResult(text, watch.Elapsed, Id);
+        return new Translator.Core.OcrResult(text, watch.Elapsed, Id, confidence);
     }
 }

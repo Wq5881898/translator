@@ -13,6 +13,8 @@
 - OCR Provider 接口未改变，后续仍可替换；
 - 图片继续只在内存中传递，不上传、不写入磁盘或剪贴板；
 - 用户无需安装 Windows 英文语言包、注册账号、配置 Key 或联网。
+- 对 OCR 平均置信度、英文字母数量、异常单字母比例和基本英文形态进行轻量校验；
+- 中文或其他不可靠内容不会作为伪英文输出，编辑框会清空，具体原因显示在下方状态区。
 
 ## 自动验证
 
@@ -21,8 +23,9 @@ Build succeeded.
 0 warnings
 0 errors
 PASS  packaged English OCR on in-memory image
+PASS  non-English OCR is rejected with a reason
 PASS  Windows local OCR on in-memory image
-6/6 technical checks passed.
+7/7 technical checks passed.
 ```
 
 ## 实际页面回归
