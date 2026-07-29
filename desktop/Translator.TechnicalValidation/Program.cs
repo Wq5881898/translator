@@ -52,6 +52,24 @@ if (args is ["--capture-window", var titleFragment])
     return result.Text.Any(character => character is >= 'A' and <= 'Z' or >= 'a' and <= 'z') ? 0 : 1;
 }
 
+if (args is ["--bridge-health"])
+{
+    var provider = new BrowserBridgeTranslationProvider();
+    var health = await provider.CheckHealthAsync(CancellationToken.None);
+    Console.WriteLine(health.Message);
+    return health.IsAvailable ? 0 : 1;
+}
+
+if (args is ["--bridge-translate", var text])
+{
+    var provider = new BrowserBridgeTranslationProvider();
+    var result = await provider.TranslateAsync(
+        new TranslationRequest(Guid.NewGuid().ToString("N"), text),
+        CancellationToken.None);
+    Console.WriteLine(result.TranslatedText);
+    return string.IsNullOrWhiteSpace(result.TranslatedText) ? 1 : 0;
+}
+
 var checks = new (string Name, Func<Task> Run)[]
 {
     ("text rules", ValidateTextRulesAsync),

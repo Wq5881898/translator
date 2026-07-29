@@ -29,7 +29,13 @@ $manifestJson = $manifest | ConvertTo-Json -Depth 4
 
 $registryPath = "HKCU:\Software\Google\Chrome\NativeMessagingHosts\com.wq5881898.translator.stage2"
 New-Item -Path $registryPath -Force | Out-Null
-Set-ItemProperty -Path $registryPath -Name "(default)" -Value $manifestPath
+Set-Item -Path $registryPath -Value $manifestPath
+
+$registeredManifest = (Get-Item -LiteralPath $registryPath).GetValue("")
+if ($registeredManifest -ne $manifestPath) {
+    throw "Chrome Native Messaging registration verification failed."
+}
 
 Write-Host "Translator bridge installed for extension $ExtensionId."
+Write-Host "Verified Chrome manifest: $registeredManifest"
 Write-Host "Restart Chrome before testing."

@@ -38,11 +38,28 @@ jobs:
         run: |
           dotnet publish desktop/Translator.Desktop --configuration Release --runtime win-x64 --self-contained true --output staging/desktop --configfile NuGet.Config
           dotnet publish desktop/Translator.BridgeHost --configuration Release --runtime win-x64 --self-contained true --output staging/bridge-host --configfile NuGet.Config
+          dotnet publish desktop/Translator.TechnicalValidation --configuration Release --runtime win-x64 --self-contained true --output staging/validation --configfile NuGet.Config
           Copy-Item desktop/bridge staging/bridge -Recurse
           Copy-Item docs/stage-2/BATCH_B_TEST_GUIDE_ZH.md staging/
           Copy-Item docs/stage-2/STAGE2_DESIGN_ZH.md staging/
           Copy-Item THIRD_PARTY_NOTICES.md staging/
           Copy-Item .output/chrome-mv3 staging/extension -Recurse
+      - name: Validate Chrome bridge registration
+        shell: pwsh
+        run: |
+          & staging/bridge/install-bridge.ps1
+          $key = Get-Item 'HKCU:\Software\Google\Chrome\NativeMessagingHosts\com.wq5881898.translator.stage2'
+          $manifestPath = $key.GetValue('')
+          if (-not $manifestPath) {
+            throw 'Chrome native host default registry value is missing.'
+          }
+          $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
+          if ($manifest.path -ne (Resolve-Path staging/bridge-host/Translator.BridgeHost.exe).Path) {
+            throw 'Chrome native host executable path is incorrect.'
+          }
+          if ($manifest.allowed_origins -notcontains 'chrome-extension://djbkcmlpogpnafgifiocehmkkghnhjjb/') {
+            throw 'Chrome extension origin is incorrect.'
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: translator-stage2-batch-b

@@ -65,9 +65,20 @@ public partial class MainWindow : Window
     private async void TranslateButton_Click(object sender, RoutedEventArgs e)
     {
         TranslatedText.Clear();
-        SetBusy(true, "Sending recognized text to Chrome local translation…");
+        SetBusy(true, "Checking the Chrome translation bridge...");
         try
         {
+            var health = await _translation.CheckHealthAsync(CancellationToken.None);
+            if (!health.IsAvailable)
+            {
+                StatusText.Text =
+                    $"Translation could not start: {health.Message} " +
+                    "Run bridge\\install-bridge.ps1, fully restart Chrome, and retry.";
+                return;
+            }
+
+            StatusText.Text =
+                "Chrome bridge connected. Translating locally; first-time language-pack setup may take up to 35 seconds...";
             var result = await _translation.TranslateAsync(
                 new TranslationRequest(Guid.NewGuid().ToString("N"), RecognizedText.Text),
                 CancellationToken.None);
