@@ -12,6 +12,7 @@ public partial class MainWindow : Window
 
     private async void CaptureButton_Click(object sender, RoutedEventArgs e)
     {
+        RecognizedText.Clear();
         SetBusy(true, "Select a region. Press Esc to cancel.");
         Hide();
         try
@@ -23,7 +24,16 @@ public partial class MainWindow : Window
             StatusText.Text = "Running local OCR…";
             var result = await _ocr.RecognizeAsync(image, CancellationToken.None);
             RecognizedText.Text = result.Text;
-            StatusText.Text = $"Local OCR completed in {result.Duration.TotalMilliseconds:F0} ms. The in-memory image has been disposed.";
+            if (string.IsNullOrWhiteSpace(result.Text) ||
+                !result.Text.Any(character => character is >= 'A' and <= 'Z' or >= 'a' and <= 'z'))
+            {
+                StatusText.Text =
+                    "No English text was recognized. Try a clearer or larger English region. You can capture again immediately.";
+                return;
+            }
+
+            StatusText.Text =
+                $"English OCR completed in {result.Duration.TotalMilliseconds:F0} ms. The in-memory image has been disposed.";
         }
         catch (Exception exception)
         {

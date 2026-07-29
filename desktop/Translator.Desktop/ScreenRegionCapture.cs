@@ -1,6 +1,8 @@
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Threading;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -17,6 +19,8 @@ public static class ScreenRegionCapture
         var bounds = Forms.SystemInformation.VirtualScreen;
         var overlay = new RegionSelectionWindow(bounds);
         if (overlay.ShowDialog() != true || overlay.SelectedRegion is not { } region) return null;
+        DwmFlush();
+        Thread.Sleep(80);
         using var bitmap = new Bitmap(region.Width, region.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
         using (var graphics = Graphics.FromImage(bitmap))
             graphics.CopyFromScreen(region.Left, region.Top, 0, 0, region.Size, CopyPixelOperation.SourceCopy);
@@ -25,6 +29,9 @@ public static class ScreenRegionCapture
         stream.Position = 0;
         return stream;
     }
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmFlush();
 }
 
 internal sealed class RegionSelectionWindow : Window

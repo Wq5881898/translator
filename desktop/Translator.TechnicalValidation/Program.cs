@@ -75,7 +75,12 @@ static async Task ValidateWindowsOcrAsync()
     var provider = new WindowsOcrProvider();
     var health = await provider.CheckHealthAsync(CancellationToken.None);
     Assert(health.IsAvailable, health.Message);
-    var result = await provider.RecognizeAsync(stream, CancellationToken.None);
-    Assert(result.Text.Contains("local OCR", StringComparison.OrdinalIgnoreCase), $"Unexpected OCR result: {result.Text}");
+    for (var attempt = 1; attempt <= 2; attempt++)
+    {
+        stream.Position = 0;
+        var result = await provider.RecognizeAsync(stream, CancellationToken.None);
+        Assert(result.Text.Contains("local OCR", StringComparison.OrdinalIgnoreCase),
+            $"Unexpected OCR result on attempt {attempt}: {result.Text}");
+    }
 }
 static void Assert(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }

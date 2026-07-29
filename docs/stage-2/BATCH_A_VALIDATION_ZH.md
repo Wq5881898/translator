@@ -117,6 +117,7 @@ Chrome MV3 production build: passed
 | NuGet 初始还原失败 | Windows SDK 引用包不在本地 | 使用官方 NuGet 源和项目级 `NuGet.Config` |
 | OCR 首次解码失败 | 写入 WinRT 内存流后未显式刷新 | 写入后 `FlushAsync` 再解码 |
 | OCR 把小写 `l` 识别为大写 `I` | OCR 字形歧义 | 保留用户校对步骤并安排样本评估 |
+| 中文截图后再次截取英文不显示 | OCR 跟随用户语言，且遮罩关闭后截屏过早 | 英文引擎优先、系统引擎回退；等待 DWM 遮罩退出；新截图清除旧结果并明确提示空结果 |
 
 ## 5. 隐私核对
 

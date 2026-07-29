@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using Translator.Core;
 using Windows.Graphics.Imaging;
+using Windows.Globalization;
 using Windows.Media.Ocr;
 using Windows.Storage.Streams;
 
@@ -13,17 +14,22 @@ public sealed class WindowsOcrProvider : IOcrProvider
     public Task<ProviderHealth> CheckHealthAsync(CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
-        var engine = OcrEngine.TryCreateFromUserProfileLanguages();
+        var (engine, isEnglish) = CreateEngine();
         return Task.FromResult(engine is null
-            ? new ProviderHealth(false, "Install an English Windows language/OCR feature.")
-            : new ProviderHealth(true, $"Windows OCR ready ({engine.RecognizerLanguage.LanguageTag})."));
+            ? new ProviderHealth(false, "Windows local OCR is unavailable.")
+            : new ProviderHealth(true, isEnglish
+                ? $"Windows English OCR ready ({engine.RecognizerLanguage.LanguageTag})."
+                : $"Windows OCR fallback ready ({engine.RecognizerLanguage.LanguageTag}); install English OCR for best accuracy."));
     }
 
     public async Task<Translator.Core.OcrResult> RecognizeAsync(Stream imageStream, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
-        var engine = OcrEngine.TryCreateFromUserProfileLanguages()
-            ?? throw new InvalidOperationException("Windows local OCR is unavailable. Install an English Windows language/OCR feature.");
+        var (engine, _) = CreateEngine();
+        if (engine is null)
+        {
+            throw new InvalidOperationException("Windows local OCR is unavailable.");
+        }
         var watch = Stopwatch.StartNew();
         using var randomAccess = new InMemoryRandomAccessStream();
         var output = randomAccess.AsStreamForWrite();
@@ -35,5 +41,19 @@ public sealed class WindowsOcrProvider : IOcrProvider
         var result = await engine.RecognizeAsync(bitmap);
         watch.Stop();
         return new Translator.Core.OcrResult(TextRules.Normalize(result.Text), watch.Elapsed, Id);
+    }
+
+    private static (OcrEngine? Engine, bool IsEnglish) CreateEngine()
+    {
+        foreach (var languageTag in new[] { "en-US", "en-GB" })
+        {
+            var language = new Language(languageTag);
+            if (OcrEngine.IsLanguageSupported(language))
+            {
+                return (OcrEngine.TryCreateFromLanguage(language), true);
+            }
+        }
+
+        return (OcrEngine.TryCreateFromUserProfileLanguages(), false);
     }
 }
