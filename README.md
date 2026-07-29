@@ -2,7 +2,7 @@
 
 Translator is a lightweight, local-first browser extension for daily English learning.
 
-## Stage 1 release candidate
+## Stage 1 final release candidate
 
 Core workflow:
 
@@ -19,13 +19,17 @@ Features:
 - heart-based word and sentence favorites;
 - hidden local favorites window;
 - Excel-friendly UTF-8 CSV import and export;
+- import progress and row-specific errors inside the favorites window;
 - understandable retry, timeout, provider, input, import, and storage errors;
 - two-step local data clearing;
 - no Translator backend, analytics, ads, or account requirement.
 
-## Install
+## Final documentation
 
-See [Chrome and Edge installation instructions](docs/INSTALLATION.md).
+- [中文安装与使用说明书](docs/FINAL_USER_GUIDE_ZH.md)
+- [中文功能架构与维护设计方案](docs/FINAL_DESIGN_ZH.md)
+- [中文第一阶段最终交付索引](docs/FINAL_DELIVERY_INDEX_ZH.md)
+- [Concise Chrome and Edge installation instructions](docs/INSTALLATION.md)
 
 After loading or reloading an unpacked build, refresh webpages that were already open so the updated selection script can run.
 
@@ -59,4 +63,5 @@ The following are intentionally not part of Stage 1:
 
 - translation-count statistics;
 - Windows screenshot OCR;
+- automatic GPT integration and commercial dictionaries;
 - browser-store publication.
