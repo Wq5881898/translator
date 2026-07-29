@@ -45,6 +45,17 @@ Covered business rules include:
 - favorite creation, removal, and deduplication;
 - CSV quoting, Unicode, validation, round-trip, merge, and deduplication.
 
+### Recorded release-candidate run
+
+- GitHub Actions run: `30417191586` (`CI #43`)
+- Result: passed
+- TypeScript strict type-check: passed
+- Unit tests: 29 passed in 9 test files
+- Chromium Manifest V3 production build: passed, 224.16 kB unpacked
+- Release verification: permissions, hosts, version, artifact, and required documents passed
+- Uploaded artifact: `translator-stage1-rc-c5ac56e2d3f7b2cbb93ec39f9d4d04e745ac266d`
+- Artifact contents: 10 files, 73,505-byte ZIP, SHA-256 `9e61244c80a5b6e5961bc290c830a126bc19076047bf095b9f07f87b453d6eb2`
+
 ## 3. User-reported defects and results
 
 | ID | Observation | Root cause | Resolution | Result |
@@ -55,7 +66,7 @@ Covered business rules include:
 | U-04 | Automatic selection worked in one tab but not an already-open tab | Reloaded extensions do not inject updated content scripts into pages that were already open | Test instructions now require refreshing existing tabs after extension reload | Passed user retest |
 | U-05 | Favorites occupied too much of the translation interface | Favorites were shown inline | Favorites moved to a hidden modal opened by a button | Passed user retest |
 | U-06 | Save state was unclear in settings | Success message remained below the fold and the settings window stayed open | Success is shown briefly and the settings window closes automatically | Passed user retest |
-| U-07 | JSON export was difficult to read | Backup format prioritized machine structure | Export/import changed to UTF-8 CSV readable in Excel and text editors | Awaiting RC regression test |
+| U-07 | JSON export was difficult to read | Backup format prioritized machine structure | Export/import changed to UTF-8 CSV readable in Excel and text editors | Passed user retest |
 | U-08 | Pronunciation displayed phonetics but could not play audio | No speech module existed | Local Web Speech playback, stop control, and US/UK preference added | Passed user retest |
 
 ## 4. CI defects found during development
