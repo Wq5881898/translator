@@ -122,16 +122,29 @@ export function App() {
   useEffect(() => {
     let active = true;
 
-    void browser.storage.local.get(FAVORITES_STORAGE_KEY).then((stored) => {
-      if (!active) {
-        return;
-      }
+    void browser.storage.local
+      .get(FAVORITES_STORAGE_KEY)
+      .then((stored) => {
+        if (!active) {
+          return;
+        }
 
-      const saved = stored[FAVORITES_STORAGE_KEY];
-      if (Array.isArray(saved)) {
-        setFavorites(saved as FavoriteEntry[]);
-      }
-    });
+        const saved = stored[FAVORITES_STORAGE_KEY];
+        if (Array.isArray(saved)) {
+          setFavorites(saved as FavoriteEntry[]);
+        }
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+
+        const message =
+          'Favorites could not be loaded. Check browser storage and reopen Translator.';
+        setStatus(message);
+        setFoundationResult(message);
+        setOutputIsError(true);
+      });
 
     return () => {
       active = false;
@@ -185,10 +198,19 @@ export function App() {
   }, []);
 
   async function persistFavorites(nextFavorites: FavoriteEntry[]) {
-    await browser.storage.local.set({
-      [FAVORITES_STORAGE_KEY]: nextFavorites,
-    });
-    setFavorites(nextFavorites);
+    try {
+      await browser.storage.local.set({
+        [FAVORITES_STORAGE_KEY]: nextFavorites,
+      });
+      setFavorites(nextFavorites);
+    } catch {
+      const message =
+        'Favorites could not be saved. Check browser storage and try again.';
+      setStatus(message);
+      setFoundationResult(message);
+      setOutputIsError(true);
+      throw new Error(message);
+    }
   }
 
   async function toggleCurrentFavorite() {
@@ -202,13 +224,21 @@ export function App() {
       ? removeFavorite(favorites, existing.id)
       : addFavorite(favorites, translation);
 
-    await persistFavorites(nextFavorites);
-    setStatus(existing ? 'Removed from favorites' : 'Saved locally to favorites');
+    try {
+      await persistFavorites(nextFavorites);
+      setStatus(existing ? 'Removed from favorites' : 'Saved locally to favorites');
+    } catch {
+      // persistFavorites already displays a recoverable storage error.
+    }
   }
 
   async function removeSavedFavorite(id: string) {
-    await persistFavorites(removeFavorite(favorites, id));
-    setStatus('Removed from favorites');
+    try {
+      await persistFavorites(removeFavorite(favorites, id));
+      setStatus('Removed from favorites');
+    } catch {
+      // persistFavorites already displays a recoverable storage error.
+    }
   }
 
   async function togglePronunciation(text: string) {
@@ -280,7 +310,7 @@ export function App() {
 
   return (
     <main className="panel">
-            <p className="eyebrow">Milestone 6</p>
+            <p className="eyebrow">Stage 1 release candidate</p>
       <h1>Translator</h1>
       <p className="intro">
         Translate locally, then keep useful words and sentences in this browser.
