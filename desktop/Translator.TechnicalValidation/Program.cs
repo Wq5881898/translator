@@ -4,8 +4,33 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Drawing;
+using System.Diagnostics;
 using Translator.Core;
 using Translator.Desktop;
+
+if (args is ["--image", var imagePath])
+{
+    await using var image = File.OpenRead(imagePath);
+    var provider = new WindowsOcrProvider();
+    var result = await provider.RecognizeAsync(image, CancellationToken.None);
+    Console.WriteLine(result.Text);
+    return string.IsNullOrWhiteSpace(result.Text) ? 1 : 0;
+}
+
+if (args is ["--capture-window", var titleFragment])
+{
+    var windowBounds = FindVisibleWindow(titleFragment)
+        ?? throw new InvalidOperationException($"No visible window contains title: {titleFragment}");
+    await using var image = ScreenRegionCapture.CaptureRegion(windowBounds);
+    var provider = new WindowsOcrProvider();
+    var result = await provider.RecognizeAsync(image, CancellationToken.None);
+    Console.WriteLine($"Captured physical region: {windowBounds}");
+    Console.WriteLine(result.Text);
+    return result.Text.Any(character => character is >= 'A' and <= 'Z' or >= 'a' and <= 'z') ? 0 : 1;
+}
 
 var checks = new (string Name, Func<Task> Run)[]
 {
@@ -84,3 +109,48 @@ static async Task ValidateWindowsOcrAsync()
     }
 }
 static void Assert(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
+
+static Rectangle? FindVisibleWindow(string titleFragment)
+{
+    Rectangle? result = null;
+    EnumWindows((window, parameter) =>
+    {
+        if (!IsWindowVisible(window)) return true;
+        var length = GetWindowTextLength(window);
+        if (length == 0) return true;
+        var title = new StringBuilder(length + 1);
+        GetWindowText(window, title, title.Capacity);
+        if (!title.ToString().Contains(titleFragment, StringComparison.OrdinalIgnoreCase)) return true;
+        GetWindowThreadProcessId(window, out var processId);
+        try
+        {
+            if (!Process.GetProcessById((int)processId).ProcessName.Equals("chrome", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        catch (ArgumentException)
+        {
+            return true;
+        }
+        if (!GetWindowRect(window, out var bounds)) return true;
+        result = Rectangle.FromLTRB(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom);
+        return false;
+    }, IntPtr.Zero);
+    return result;
+}
+
+[DllImport("user32.dll")]
+static extern bool EnumWindows(EnumWindowsCallback callback, IntPtr parameter);
+[DllImport("user32.dll")]
+static extern bool IsWindowVisible(IntPtr window);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)]
+static extern int GetWindowText(IntPtr window, StringBuilder text, int maximum);
+[DllImport("user32.dll")]
+static extern int GetWindowTextLength(IntPtr window);
+[DllImport("user32.dll")]
+static extern bool GetWindowRect(IntPtr window, out NativeRectangle rectangle);
+[DllImport("user32.dll")]
+static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+
+delegate bool EnumWindowsCallback(IntPtr window, IntPtr parameter);
+[StructLayout(LayoutKind.Sequential)]
+struct NativeRectangle { public int Left; public int Top; public int Right; public int Bottom; }

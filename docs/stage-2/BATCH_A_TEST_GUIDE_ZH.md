@@ -16,6 +16,14 @@
 8. 检查状态中是否出现 `[模拟翻译]`、文本类型和 `provider: mock`。
 9. 再次截图时按 `Esc`，确认显示取消且程序可继续使用。
 
+建议先使用已验证页面：
+
+```text
+https://www.merriam-webster.com/word-of-the-day
+```
+
+如果 Chrome 已把页面自动翻译成中文，请先选择页面上仍保持英文的 `Dictionary`、`Thesaurus` 或音标，或者临时查看原始英文页面。
+
 ## 预期结果
 
 - 截图时出现跨屏遮罩；

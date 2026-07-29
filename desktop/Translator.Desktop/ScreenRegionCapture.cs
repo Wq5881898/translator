@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using Forms = System.Windows.Forms;
 using Point = System.Windows.Point;
@@ -21,6 +22,16 @@ public static class ScreenRegionCapture
         if (overlay.ShowDialog() != true || overlay.SelectedRegion is not { } region) return null;
         DwmFlush();
         Thread.Sleep(80);
+        return CaptureRegion(region);
+    }
+
+    public static MemoryStream CaptureRegion(Rectangle region)
+    {
+        if (region.Width < 1 || region.Height < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(region), "Capture region must have a positive size.");
+        }
+
         using var bitmap = new Bitmap(region.Width, region.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
         using (var graphics = Graphics.FromImage(bitmap))
             graphics.CopyFromScreen(region.Left, region.Top, 0, 0, region.Size, CopyPixelOperation.SourceCopy);
@@ -48,11 +59,15 @@ internal sealed class RegionSelectionWindow : Window
     public RegionSelectionWindow(Rectangle bounds)
     {
         _bounds = bounds;
-        Left = bounds.Left; Top = bounds.Top; Width = bounds.Width; Height = bounds.Height;
         WindowStyle = WindowStyle.None; ResizeMode = ResizeMode.NoResize; AllowsTransparency = true;
         Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(90, 0, 0, 0));
         Topmost = true; ShowInTaskbar = false; Cursor = System.Windows.Input.Cursors.Cross; WindowStartupLocation = WindowStartupLocation.Manual;
         Content = _canvas; _canvas.Children.Add(_selection);
+        SourceInitialized += (_, _) =>
+        {
+            var handle = new WindowInteropHelper(this).Handle;
+            SetWindowPos(handle, new IntPtr(-1), _bounds.Left, _bounds.Top, _bounds.Width, _bounds.Height, 0x0040);
+        };
         MouseLeftButtonDown += OnDown; MouseMove += OnMove; MouseLeftButtonUp += OnUp;
         KeyDown += (_, args) => { if (args.Key == Key.Escape) DialogResult = false; };
     }
@@ -64,9 +79,13 @@ internal sealed class RegionSelectionWindow : Window
     {
         if (_start is not { } start) return;
         var end = args.GetPosition(_canvas); Mouse.Capture(null); _start = null;
-        var region = new Rectangle((int)Math.Round(Math.Min(start.X, end.X)) + _bounds.Left,
-            (int)Math.Round(Math.Min(start.Y, end.Y)) + _bounds.Top,
-            (int)Math.Round(Math.Abs(end.X - start.X)), (int)Math.Round(Math.Abs(end.Y - start.Y)));
+        var physicalStart = PointToScreen(start);
+        var physicalEnd = PointToScreen(end);
+        var region = new Rectangle(
+            (int)Math.Round(Math.Min(physicalStart.X, physicalEnd.X)),
+            (int)Math.Round(Math.Min(physicalStart.Y, physicalEnd.Y)),
+            (int)Math.Round(Math.Abs(physicalEnd.X - physicalStart.X)),
+            (int)Math.Round(Math.Abs(physicalEnd.Y - physicalStart.Y)));
         if (region.Width < 3 || region.Height < 3) { DialogResult = false; return; }
         SelectedRegion = region; DialogResult = true;
     }
@@ -76,4 +95,14 @@ internal sealed class RegionSelectionWindow : Window
         System.Windows.Controls.Canvas.SetTop(_selection, Math.Min(start.Y, end.Y));
         _selection.Width = Math.Abs(end.X - start.X); _selection.Height = Math.Abs(end.Y - start.Y);
     }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetWindowPos(
+        IntPtr window,
+        IntPtr insertAfter,
+        int x,
+        int y,
+        int width,
+        int height,
+        uint flags);
 }

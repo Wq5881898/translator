@@ -118,6 +118,26 @@ Chrome MV3 production build: passed
 | OCR 首次解码失败 | 写入 WinRT 内存流后未显式刷新 | 写入后 `FlushAsync` 再解码 |
 | OCR 把小写 `l` 识别为大写 `I` | OCR 字形歧义 | 保留用户校对步骤并安排样本评估 |
 | 中文截图后再次截取英文不显示 | OCR 跟随用户语言，且遮罩关闭后截屏过早 | 英文引擎优先、系统引擎回退；等待 DWM 遮罩退出；新截图清除旧结果并明确提示空结果 |
+| 所有实际框选均返回空结果 | WPF 框选使用逻辑坐标，`CopyFromScreen` 使用物理像素，Windows 缩放后坐标偏移 | 启用 Per-Monitor V2；使用 `PointToScreen` 转换框选端点；通过 Win32 物理像素设置跨屏遮罩 |
+
+## 4.1 Merriam-Webster 实际网页验证
+
+验证网址：
+
+```text
+https://www.merriam-webster.com/word-of-the-day
+```
+
+在未自动翻译的浏览器中取得当前可见页面，页面包含 `inveigle`、`What It Means` 和多段英文。该实际网页画面经 `WindowsOcrProvider` 识别成功，结果包含：
+
+```text
+Word of the Day
+inveigle
+What It Means
+To inveigle someone is to persuade them...
+```
+
+同时执行了 Windows 物理屏幕捕获测试，证明 `CopyFromScreen → PNG 内存流 → Windows OCR` 链路能够返回实际屏幕文字。修复后桌面框选使用同一物理像素捕获方法。
 
 ## 5. 隐私核对
 
