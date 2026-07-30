@@ -3,14 +3,6 @@ name: Stage 2 Batch C
 on:
   push:
     branches: ['stage2/batch-c']
-  pull_request:
-    paths:
-      - 'desktop/**'
-      - 'src/core/stage2-bridge*'
-      - 'entrypoints/background.ts'
-      - 'entrypoints/offscreen/**'
-      - 'wxt.config.ts'
-      - '.github/workflows/stage2-batch-c.yml'
 
 jobs:
   validate:

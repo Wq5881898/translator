@@ -20,17 +20,19 @@
 
         <StackPanel>
             <TextBlock FontSize="28" FontWeight="Bold" Text="Translator"/>
-            <TextBlock Margin="0,6,0,0" Foreground="#52635A" TextWrapping="Wrap"
-                       Text="Press Ctrl+Shift+X anywhere to capture, recognize and translate."/>
+            <TextBlock x:Name="ShortcutHint" Margin="0,6,0,0" Foreground="#52635A"
+                       TextWrapping="Wrap"/>
         </StackPanel>
 
         <StackPanel Grid.Row="1" Margin="0,20,0,16" Orientation="Horizontal">
             <Button x:Name="CaptureButton" Click="CaptureButton_Click"
                     Content="Select screen region"/>
             <Button x:Name="TranslateButton" Margin="10,0,0,0"
-                    Click="TranslateButton_Click" Content="Translate again"/>
+                    Click="TranslateButton_Click" Content="Translate Chinese"/>
             <Button x:Name="CopyButton" Margin="10,0,0,0"
                     Click="CopyButton_Click" Content="Copy Chinese"/>
+            <Button x:Name="SettingsButton" Margin="10,0,0,0"
+                    Click="SettingsButton_Click" Content="Shortcut settings"/>
         </StackPanel>
 
         <Grid Grid.Row="2">

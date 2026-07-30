@@ -9,6 +9,7 @@ namespace Translator.Desktop;
 public sealed class GlobalHotKeyService : IDisposable
 {
     private const int WmHotKey = 0x0312;
+    private const uint ModAlt = 0x0001;
     private const uint ModControl = 0x0002;
     private const uint ModShift = 0x0004;
     private const uint ModNoRepeat = 0x4000;
@@ -19,10 +20,11 @@ public sealed class GlobalHotKeyService : IDisposable
 
     public event EventHandler? Pressed;
 
-    public string DisplayName => "Ctrl+Shift+X";
+    public string DisplayName { get; private set; } = ShortcutSettings.Default.DisplayName;
 
-    public bool TryRegister(Window window, out string? error)
+    public bool TryRegister(Window window, ShortcutSettings settings, out string? error)
     {
+        Dispose();
         error = null;
         var handle = new WindowInteropHelper(window).Handle;
         _source = HwndSource.FromHwnd(handle);
@@ -33,11 +35,21 @@ public sealed class GlobalHotKeyService : IDisposable
         }
 
         _source.AddHook(ProcessWindowMessage);
+        var modifiers = settings.Modifiers switch
+        {
+            ShortcutModifiers.ControlAlt => ModControl | ModAlt,
+            ShortcutModifiers.AltShift => ModAlt | ModShift,
+            _ => ModControl | ModShift
+        };
+        var key = Enum.TryParse<Key>(settings.Key, true, out var parsedKey)
+            ? parsedKey
+            : Key.X;
+        DisplayName = settings.DisplayName;
         _registered = RegisterHotKey(
             handle,
             HotKeyId,
-            ModControl | ModShift | ModNoRepeat,
-            (uint)KeyInterop.VirtualKeyFromKey(Key.X));
+            modifiers | ModNoRepeat,
+            (uint)KeyInterop.VirtualKeyFromKey(key));
         if (_registered)
         {
             return true;
