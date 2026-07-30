@@ -10,7 +10,7 @@ while (true)
     using var pipe = new NamedPipeServerStream(
         BridgeEnvelope.PipeName,
         PipeDirection.InOut,
-        1,
+        NamedPipeServerStream.MaxAllowedServerInstances,
         PipeTransmissionMode.Byte,
         PipeOptions.Asynchronous);
     using var waitCancellation = new CancellationTokenSource();
@@ -132,3 +132,4 @@ static async Task<BridgeEnvelope> WriteFavoritesAsync(BridgeEnvelope request)
             new { code = "favorites_write_failed", message = exception.Message });
     }
 }
+
