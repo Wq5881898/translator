@@ -35,8 +35,8 @@ Name: "{autoprograms}\Translator 浏览器插件文件夹"; Filename: "{app}\ext
 Name: "{autoprograms}\Translator 安装说明"; Filename: "{app}\INSTALL_AFTER_SETUP_ZH.txt"
 
 [Registry]
-Root: HKCU; Subkey: "Software\Google\Chrome\NativeMessagingHosts\com.wq5881898.translator.stage2"; ValueType: string; ValueName: ""; ValueData: "{localappdata}\Translator\bridge\com.wq5881898.translator.stage2.json"; Flags: uninsdeletekey 64bit
-Root: HKCU; Subkey: "Software\Google\Chrome\NativeMessagingHosts\com.wq5881898.translator.stage2"; ValueType: string; ValueName: ""; ValueData: "{localappdata}\Translator\bridge\com.wq5881898.translator.stage2.json"; Flags: uninsdeletekey 32bit
+Root: HKCU64; Subkey: "Software\Google\Chrome\NativeMessagingHosts\com.wq5881898.translator.stage2"; ValueType: string; ValueName: ""; ValueData: "{localappdata}\Translator\bridge\com.wq5881898.translator.stage2.json"; Flags: uninsdeletekey
+Root: HKCU32; Subkey: "Software\Google\Chrome\NativeMessagingHosts\com.wq5881898.translator.stage2"; ValueType: string; ValueName: ""; ValueData: "{localappdata}\Translator\bridge\com.wq5881898.translator.stage2.json"; Flags: uninsdeletekey
 
 [Run]
 Filename: "{app}\desktop\Translator.Desktop.exe"; Description: "启动 Translator"; Flags: nowait postinstall skipifsilent
