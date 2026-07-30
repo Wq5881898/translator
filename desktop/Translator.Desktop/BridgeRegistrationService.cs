@@ -45,9 +45,50 @@ public static class BridgeRegistrationService
             JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }),
             new UTF8Encoding(false));
 
-        using var key = Registry.CurrentUser.CreateSubKey(RegistryPath, true)
-            ?? throw new InvalidOperationException("Chrome bridge registry key could not be created.");
-        key.SetValue("", manifestPath, RegistryValueKind.String);
+        var errors = new List<string>();
+        var registered = false;
+        foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
+        {
+            try
+            {
+                using var currentUser = RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, view);
+                using var key = currentUser.CreateSubKey(RegistryPath, true)
+                    ?? throw new InvalidOperationException("registry key could not be created");
+                key.SetValue("", manifestPath, RegistryValueKind.String);
+                key.Flush();
+                var savedPath = key.GetValue("") as string;
+                if (!string.Equals(savedPath, manifestPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException("registry value verification failed");
+                }
+                registered = true;
+            }
+            catch (Exception exception)
+            {
+                errors.Add($"{view}: {exception.Message}");
+            }
+        }
+        if (!registered)
+        {
+            throw new InvalidOperationException(
+                $"Chrome bridge registration failed in both registry views. {string.Join(" | ", errors)}");
+        }
         return hostPath;
     }
+
+    public static bool IsRegistered()
+    {
+        foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
+        {
+            using var currentUser = RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, view);
+            using var key = currentUser.OpenSubKey(RegistryPath);
+            var manifestPath = key?.GetValue("") as string;
+            if (!string.IsNullOrWhiteSpace(manifestPath) && File.Exists(manifestPath))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
 }
+
