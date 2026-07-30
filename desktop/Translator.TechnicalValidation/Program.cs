@@ -118,6 +118,14 @@ static Task ValidateTextRulesAsync()
         "English-only and bilingual OCR results were not reconciled.");
     Assert(TextRules.CleanEnglishOcrArtifacts("GitHub Cl") == "GitHub CI",
         "A likely technical acronym I/l confusion was not corrected.");
+    Assert(
+        TextRules.ExtractEnglishOcrContent("this week’s cartoon, Russia’s attack, America’s plan") ==
+        "this week's cartoon, Russia's attack, America's plan",
+        "Curly OCR apostrophes were not normalized.");
+    Assert(
+        TextRules.CleanEnglishOcrArtifacts("this week s cartoon Russia s attack America s plan") ==
+        "this week's cartoon Russia's attack America's plan",
+        "Detached possessive markers were not repaired.");
     return Task.CompletedTask;
 }
 static async Task ValidateMockAsync()

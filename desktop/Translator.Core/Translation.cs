@@ -101,6 +101,15 @@ public static class TextRules
 
         for (var index = 1; index < tokens.Count; index++)
         {
+            if (tokens[index].Equals("s", StringComparison.OrdinalIgnoreCase) &&
+                tokens[index - 1].Any(IsLatinLetter))
+            {
+                tokens[index - 1] = $"{tokens[index - 1].TrimEnd('\'')}'s";
+                tokens.RemoveAt(index);
+                index--;
+                continue;
+            }
+
             var previousLetters = new string(tokens[index - 1].Where(IsLatinLetter).ToArray());
             var currentLetters = new string(tokens[index].Where(IsLatinLetter).ToArray());
             var previousLooksTechnical =
@@ -121,15 +130,23 @@ public static class TextRules
     public static string ExtractEnglishOcrContent(string text)
     {
         var extracted = text.Select(character =>
-            IsLatinLetter(character) ||
-            char.IsDigit(character) ||
-            character is ' ' or '\r' or '\n' or '\t' ||
-            character is '.' or ',' or ':' or ';' or '!' or '?' or
-                '\'' or '"' or '-' or '_' or '/' or '\\' or
-                '(' or ')' or '[' or ']' or '{' or '}' or
-                '+' or '=' or '%' or '#' or '@' or '&' or '*'
-                ? character
-                : ' ');
+        {
+            var normalized = character switch
+            {
+                '\u2018' or '\u2019' or '\u02BC' or '\uFF07' => '\'',
+                '\u201C' or '\u201D' => '"',
+                _ => character
+            };
+            return IsLatinLetter(normalized) ||
+                   char.IsDigit(normalized) ||
+                   normalized is ' ' or '\r' or '\n' or '\t' ||
+                   normalized is '.' or ',' or ':' or ';' or '!' or '?' or
+                       '\'' or '"' or '-' or '_' or '/' or '\\' or
+                       '(' or ')' or '[' or ']' or '{' or '}' or
+                       '+' or '=' or '%' or '#' or '@' or '&' or '*'
+                ? normalized
+                : ' ';
+        });
         return Normalize(new string(extracted.ToArray()));
     }
 
