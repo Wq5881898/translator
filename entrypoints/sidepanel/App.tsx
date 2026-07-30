@@ -9,7 +9,14 @@ import {
   removeFavorite,
   type FavoriteEntry,
 } from '../../src/core/favorites';
-import { mergeFavorites } from '../../src/core/favorites-transfer';
+import {
+  FAVORITES_SYNC_METADATA_KEY,
+  INITIAL_FAVORITES_SYNC_METADATA,
+  parseFavoritesSyncMetadata,
+  retryWithDelays,
+  synchronizeFavorites,
+  type FavoritesSyncMetadata,
+} from '../../src/core/favorites-sync';
 import {
   patchSharedFavorites,
   readSharedFavorites,
@@ -74,9 +81,76 @@ export function App() {
   const [foundationResult, setFoundationResult] = useState<string>();
   const [outputIsError, setOutputIsError] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [favoritesSyncStatus, setFavoritesSyncStatus] = useState<
+    'syncing' | 'shared' | 'browser'
+  >('browser');
   const requestId = useRef(0);
   const speechRequestId = useRef(0);
-  const sharedFavoritesConnected = useRef(false);
+  const favoritesRef = useRef<FavoriteEntry[]>([]);
+  const favoritesSyncMetadata = useRef<FavoritesSyncMetadata>({
+    ...INITIAL_FAVORITES_SYNC_METADATA,
+  });
+  const favoritesSyncInFlight = useRef<Promise<void> | null>(null);
+  const lastSharedSyncAttemptAt = useRef(0);
+
+  function applyFavorites(nextFavorites: FavoriteEntry[]) {
+    favoritesRef.current = nextFavorites;
+    setFavorites(nextFavorites);
+  }
+
+  async function saveFavoritesSnapshot(
+    nextFavorites: FavoriteEntry[],
+    metadata: FavoritesSyncMetadata,
+  ) {
+    await browser.storage.local.set({
+      [FAVORITES_STORAGE_KEY]: nextFavorites,
+      [FAVORITES_SYNC_METADATA_KEY]: metadata,
+    });
+    favoritesSyncMetadata.current = metadata;
+    applyFavorites(nextFavorites);
+  }
+
+  async function syncSharedFavorites(
+    withStartupRetry = false,
+    force = false,
+  ): Promise<void> {
+    if (favoritesSyncInFlight.current) {
+      return favoritesSyncInFlight.current;
+    }
+    if (
+      !withStartupRetry &&
+      !force &&
+      Date.now() - lastSharedSyncAttemptAt.current < 30_000
+    ) {
+      return;
+    }
+
+    lastSharedSyncAttemptAt.current = Date.now();
+    const operation = (async () => {
+      setFavoritesSyncStatus('syncing');
+      try {
+        const synchronize = () =>
+          synchronizeFavorites({
+            browserFavorites: favoritesRef.current,
+            metadata: favoritesSyncMetadata.current,
+            readShared: readSharedFavorites,
+            patchShared: patchSharedFavorites,
+          });
+        const result = withStartupRetry
+          ? await retryWithDelays(synchronize)
+          : await synchronize();
+        await saveFavoritesSnapshot(result.favorites, result.metadata);
+        setFavoritesSyncStatus('shared');
+      } catch {
+        setFavoritesSyncStatus('browser');
+      }
+    })().finally(() => {
+      favoritesSyncInFlight.current = null;
+    });
+
+    favoritesSyncInFlight.current = operation;
+    return operation;
+  }
 
   async function performTranslation(selectionState: SelectionTranslation) {
     const currentRequest = ++requestId.current;
@@ -129,7 +203,7 @@ export function App() {
     let active = true;
 
     void browser.storage.local
-      .get(FAVORITES_STORAGE_KEY)
+      .get([FAVORITES_STORAGE_KEY, FAVORITES_SYNC_METADATA_KEY])
       .then(async (stored) => {
         if (!active) {
           return;
@@ -137,19 +211,11 @@ export function App() {
 
         const saved = stored[FAVORITES_STORAGE_KEY];
         const browserFavorites = Array.isArray(saved) ? saved as FavoriteEntry[] : [];
-        try {
-          const sharedFavorites = await readSharedFavorites();
-          const merged = mergeFavorites(sharedFavorites, browserFavorites);
-          await patchSharedFavorites(merged);
-          await browser.storage.local.set({ [FAVORITES_STORAGE_KEY]: merged });
-          sharedFavoritesConnected.current = true;
-          if (active) setFavorites(merged);
-        } catch {
-          if (active) {
-            setFavorites(browserFavorites);
-            setStatus('Shared favorites are unavailable; browser favorites remain usable.');
-          }
-        }
+        favoritesSyncMetadata.current = parseFavoritesSyncMetadata(
+          stored[FAVORITES_SYNC_METADATA_KEY],
+        );
+        applyFavorites(browserFavorites);
+        await syncSharedFavorites(true);
       })
       .catch(() => {
         if (!active) {
@@ -217,27 +283,37 @@ export function App() {
   async function persistFavorites(nextFavorites: FavoriteEntry[]) {
     try {
       const nextIds = new Set(nextFavorites.map((favorite) => favorite.id));
-      const currentById = new Map(favorites.map((favorite) => [favorite.id, favorite]));
-      const upsert = nextFavorites.filter(
-        (favorite) =>
-          JSON.stringify(currentById.get(favorite.id)) !== JSON.stringify(favorite),
+      const currentFavorites = favoritesRef.current;
+      const currentById = new Map(
+        currentFavorites.map((favorite) => [favorite.id, favorite]),
       );
-      const removeIds = favorites
+      const mustUploadBrowserFallback =
+        favoritesSyncMetadata.current.dirty ||
+        !favoritesSyncMetadata.current.migrationCompleted;
+      const upsert = mustUploadBrowserFallback
+        ? nextFavorites
+        : nextFavorites.filter(
+            (favorite) =>
+              JSON.stringify(currentById.get(favorite.id)) !== JSON.stringify(favorite),
+          );
+      const removeIds = currentFavorites
         .filter((favorite) => !nextIds.has(favorite.id))
         .map((favorite) => favorite.id);
       const sharedFavorites = await patchSharedFavorites(upsert, removeIds);
-      await browser.storage.local.set({
-        [FAVORITES_STORAGE_KEY]: sharedFavorites,
+      await saveFavoritesSnapshot(sharedFavorites, {
+        migrationCompleted: true,
+        dirty: false,
       });
-      setFavorites(sharedFavorites);
+      setFavoritesSyncStatus('shared');
     } catch {
       try {
-        await browser.storage.local.set({
-          [FAVORITES_STORAGE_KEY]: nextFavorites,
+        await saveFavoritesSnapshot(nextFavorites, {
+          ...favoritesSyncMetadata.current,
+          dirty: true,
         });
-        setFavorites(nextFavorites);
+        setFavoritesSyncStatus('browser');
         setStatus(
-          'Saved in the browser. Shared-library sync will retry when the local bridge is available.',
+          'Saved in the browser. Shared-library sync will resume on the next user event.',
         );
       } catch {
         const message =
@@ -251,37 +327,17 @@ export function App() {
   }
 
   useEffect(() => {
-    if (!showFavorites) return;
-    let active = true;
-    const refresh = async () => {
-      try {
-        const shared = await readSharedFavorites();
-        if (!active) return;
-        const synchronized = sharedFavoritesConnected.current
-          ? shared
-          : mergeFavorites(shared, favorites);
-        const result = sharedFavoritesConnected.current
-          ? synchronized
-          : await patchSharedFavorites(synchronized);
-        sharedFavoritesConnected.current = true;
-        setFavorites(result);
-        await browser.storage.local.set({ [FAVORITES_STORAGE_KEY]: result });
-      } catch {
-        // Existing favorites remain usable while the bridge is unavailable.
-      }
-    };
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') void refresh();
+      if (document.visibilityState === 'visible') void syncSharedFavorites();
     };
-    void refresh();
-    window.addEventListener('focus', refresh);
+    const onFocus = () => void syncSharedFavorites();
+    window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
-      active = false;
-      window.removeEventListener('focus', refresh);
+      window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [showFavorites]);
+  }, []);
 
   async function toggleCurrentFavorite() {
     const translation = latest?.translation;
@@ -388,7 +444,10 @@ export function App() {
       <button
         className="secondary favorites-trigger"
         type="button"
-        onClick={() => setShowFavorites(true)}
+        onClick={() => {
+          setShowFavorites(true);
+          void syncSharedFavorites(false, true);
+        }}
       >
         Open favorites ({favorites.length})
       </button>
@@ -485,7 +544,22 @@ export function App() {
               <div>
                 <h2 id="favorites-heading">Favorites</h2>
                 <span>{favorites.length} saved locally</span>
+                <span>
+                  {favoritesSyncStatus === 'shared'
+                    ? 'Shared with the Windows app'
+                    : favoritesSyncStatus === 'syncing'
+                      ? 'Checking shared favorites…'
+                      : 'Browser storage · sync paused'}
+                </span>
               </div>
+              <button
+                className="link-button"
+                type="button"
+                disabled={favoritesSyncStatus === 'syncing'}
+                onClick={() => void syncSharedFavorites(false, true)}
+              >
+                Sync now
+              </button>
               <button
                 className="close-button"
                 type="button"
@@ -581,3 +655,4 @@ export function App() {
     </main>
   );
 }
+
