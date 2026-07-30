@@ -77,6 +77,7 @@ var checks = new (string Name, Func<Task> Run)[]
     ("native frame UTF-8 round-trip", ValidateFramingAsync),
     ("invalid native frame rejection", ValidateInvalidLengthAsync),
     ("desktop and native host translation relay", ValidateNativeHostRelayAsync),
+    ("global shortcut contract", ValidateGlobalShortcutContractAsync),
     ("packaged English OCR on in-memory image", ValidatePackagedEnglishOcrAsync),
     ("non-English OCR is rejected with a reason", ValidateNonEnglishOcrAsync),
     ("Windows local OCR on in-memory image", ValidateWindowsOcrAsync),
@@ -207,6 +208,12 @@ static async Task ValidateNativeHostRelayAsync()
             await process.WaitForExitAsync();
         }
     }
+}
+static Task ValidateGlobalShortcutContractAsync()
+{
+    using var shortcut = new GlobalHotKeyService();
+    Assert(shortcut.DisplayName == "Ctrl+Shift+X", "Unexpected global shortcut.");
+    return Task.CompletedTask;
 }
 static async Task ValidateWindowsOcrAsync()
 {

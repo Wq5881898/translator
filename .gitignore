@@ -10,3 +10,4 @@ coverage/
 desktop/**/bin/
 desktop/**/obj/
 artifacts/
+.tmp-e2e/

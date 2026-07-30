@@ -7,10 +7,54 @@ public partial class MainWindow : Window
 {
     private readonly BrowserBridgeTranslationProvider _translation = new();
     private readonly EnglishOcrProvider _ocr = new();
+    private readonly GlobalHotKeyService _hotKey = new();
+    private bool _busy;
 
-    public MainWindow() => InitializeComponent();
+    public MainWindow()
+    {
+        InitializeComponent();
+        SourceInitialized += OnSourceInitialized;
+        Closed += OnClosed;
+        _hotKey.Pressed += OnHotKeyPressed;
+    }
+
+    private void OnSourceInitialized(object? sender, EventArgs e)
+    {
+        if (_hotKey.TryRegister(this, out var error))
+        {
+            HotKeyText.Text = $"{_hotKey.DisplayName} ready";
+            StatusText.Text =
+                "Ready. The screenshot stays in memory; only recognized English is sent to Chrome local translation.";
+        }
+        else
+        {
+            HotKeyText.Text = "Shortcut unavailable";
+            StatusText.Text = error;
+        }
+    }
+
+    private void OnClosed(object? sender, EventArgs e)
+    {
+        _hotKey.Pressed -= OnHotKeyPressed;
+        _hotKey.Dispose();
+    }
+
+    private async void OnHotKeyPressed(object? sender, EventArgs e)
+    {
+        if (_busy)
+        {
+            StatusText.Text = "A capture or translation is already running. Please wait.";
+            return;
+        }
+        await CaptureRecognizeAndTranslateAsync();
+    }
 
     private async void CaptureButton_Click(object sender, RoutedEventArgs e)
+    {
+        await CaptureRecognizeAndTranslateAsync();
+    }
+
+    private async Task CaptureRecognizeAndTranslateAsync()
     {
         RecognizedText.Clear();
         TranslatedText.Clear();
@@ -20,41 +64,33 @@ public partial class MainWindow : Window
         {
             await Task.Delay(150);
             using var image = ScreenRegionCapture.CaptureWithOverlay();
-            Show();
-            Activate();
+            RestoreWindow();
             if (image is null)
             {
-                StatusText.Text = "Capture cancelled. No image was saved.";
+                StatusText.Text = "Capture cancelled. Nothing was saved.";
                 return;
             }
 
-            StatusText.Text = "Running packaged English OCR…";
+            StatusText.Text = "Recognizing English locally...";
             var result = await _ocr.RecognizeAsync(image, CancellationToken.None);
             var cleanedText = TextRules.CleanEnglishOcrArtifacts(
                 TextRules.ExtractEnglishOcrContent(result.Text));
             var assessment = TextRules.AssessEnglishOcr(cleanedText, result.Confidence);
             if (!assessment.IsReliable)
             {
-                RecognizedText.Clear();
                 StatusText.Text =
-                    $"No reliable English text was detected. {assessment.Message} " +
-                    "The possible non-English OCR output was ignored; select a clear English region and try again.";
+                    $"No reliable English text was found. {assessment.Message} " +
+                    "Select a clearer or larger English region and retry.";
                 return;
             }
 
             RecognizedText.Text = cleanedText;
-            var confidenceText = result.Confidence is null
-                ? string.Empty
-                : $" at {result.Confidence.Value:P0} confidence";
-            StatusText.Text =
-                $"English OCR completed in {result.Duration.TotalMilliseconds:F0} ms using {result.Provider}{confidenceText}. " +
-                "The in-memory image has been disposed.";
+            await TranslateCurrentTextAsync();
         }
         catch (Exception exception)
         {
-            Show();
-            Activate();
-            StatusText.Text = $"OCR validation failed: {exception.Message}";
+            RestoreWindow();
+            StatusText.Text = $"Capture or OCR failed: {FriendlyError(exception)}";
         }
         finally
         {
@@ -64,31 +100,14 @@ public partial class MainWindow : Window
 
     private async void TranslateButton_Click(object sender, RoutedEventArgs e)
     {
-        TranslatedText.Clear();
-        SetBusy(true, "Checking the Chrome translation bridge...");
+        if (_busy)
+        {
+            return;
+        }
+        SetBusy(true);
         try
         {
-            var health = await _translation.CheckHealthAsync(CancellationToken.None);
-            if (!health.IsAvailable)
-            {
-                StatusText.Text =
-                    $"Translation could not start: {health.Message} " +
-                    "Run bridge\\install-bridge.ps1, fully restart Chrome, and retry.";
-                return;
-            }
-
-            StatusText.Text =
-                "Chrome bridge connected. Translating locally; first-time language-pack setup may take up to 35 seconds...";
-            var result = await _translation.TranslateAsync(
-                new TranslationRequest(Guid.NewGuid().ToString("N"), RecognizedText.Text),
-                CancellationToken.None);
-            TranslatedText.Text = result.TranslatedText;
-            StatusText.Text =
-                $"Translation completed using {result.Provider}. Type: {result.TextKind}.";
-        }
-        catch (Exception exception)
-        {
-            StatusText.Text = $"Translation failed: {exception.Message}";
+            await TranslateCurrentTextAsync();
         }
         finally
         {
@@ -96,13 +115,85 @@ public partial class MainWindow : Window
         }
     }
 
+    private async Task TranslateCurrentTextAsync()
+    {
+        TranslatedText.Clear();
+        if (string.IsNullOrWhiteSpace(RecognizedText.Text))
+        {
+            StatusText.Text = "There is no English text to translate.";
+            return;
+        }
+
+        StatusText.Text = "Checking the Chrome translation bridge...";
+        var health = await _translation.CheckHealthAsync(CancellationToken.None);
+        if (!health.IsAvailable)
+        {
+            StatusText.Text =
+                $"Translation could not start: {health.Message} " +
+                "Keep Chrome open, enable the Translator extension, run bridge\\install-bridge.ps1, then retry.";
+            return;
+        }
+
+        StatusText.Text =
+            "Translating locally in Chrome. First-time language-pack setup may take up to 35 seconds...";
+        try
+        {
+            var result = await _translation.TranslateAsync(
+                new TranslationRequest(Guid.NewGuid().ToString("N"), RecognizedText.Text),
+                CancellationToken.None);
+            TranslatedText.Text = result.TranslatedText;
+            StatusText.Text = "Translation complete.";
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text = $"Translation failed: {FriendlyError(exception)}";
+        }
+    }
+
+    private void CopyButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(TranslatedText.Text))
+        {
+            StatusText.Text = "There is no Chinese translation to copy.";
+            return;
+        }
+
+        try
+        {
+            System.Windows.Clipboard.SetText(TranslatedText.Text);
+            StatusText.Text = "Chinese translation copied.";
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text = $"Copy failed: {FriendlyError(exception)}";
+        }
+    }
+
+    private void RestoreWindow()
+    {
+        Show();
+        if (WindowState == WindowState.Minimized)
+        {
+            WindowState = WindowState.Normal;
+        }
+        Activate();
+        Topmost = true;
+        Topmost = false;
+        Focus();
+    }
+
     private void SetBusy(bool busy, string? status = null)
     {
+        _busy = busy;
         CaptureButton.IsEnabled = !busy;
         TranslateButton.IsEnabled = !busy;
+        CopyButton.IsEnabled = !busy;
         if (status is not null)
         {
             StatusText.Text = status;
         }
     }
+
+    private static string FriendlyError(Exception exception) =>
+        exception.Message.Replace("\r", " ").Replace("\n", " ").Trim();
 }
