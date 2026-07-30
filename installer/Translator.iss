@@ -48,6 +48,40 @@ Type: files; Name: "{localappdata}\Translator\bridge\com.wq5881898.translator.st
 Type: dirifempty; Name: "{localappdata}\Translator\bridge"
 
 [Code]
+procedure RunHiddenAndWait(FileName: String; Parameters: String);
+var
+  ResultCode: Integer;
+begin
+  Exec(
+    FileName,
+    Parameters,
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  { Prevent Chrome from immediately restarting the old Native Host. }
+  RunHiddenAndWait(
+    ExpandConstant('{sys}\reg.exe'),
+    'delete "HKCU\Software\Google\Chrome\NativeMessagingHosts\com.wq5881898.translator.stage2" /f');
+  RunHiddenAndWait(
+    ExpandConstant('{sys}\reg.exe'),
+    'delete "HKCU\Software\WOW6432Node\Google\Chrome\NativeMessagingHosts\com.wq5881898.translator.stage2" /f');
+
+  { Release application and runtime files before an in-place upgrade. }
+  RunHiddenAndWait(
+    ExpandConstant('{sys}\taskkill.exe'),
+    '/f /im Translator.BridgeHost.exe');
+  RunHiddenAndWait(
+    ExpandConstant('{sys}\taskkill.exe'),
+    '/f /im Translator.Desktop.exe');
+  Sleep(500);
+  Result := '';
+end;
+
 procedure WriteNativeMessagingManifest;
 var
   ManifestDirectory: String;
