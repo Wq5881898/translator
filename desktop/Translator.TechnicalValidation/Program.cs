@@ -73,6 +73,7 @@ if (args is ["--bridge-translate", var text])
 var checks = new (string Name, Func<Task> Run)[]
 {
     ("text rules", ValidateTextRulesAsync),
+    ("translation display", ValidateTranslationDisplayAsync),
     ("shared favorites contract", ValidateSharedFavoritesAsync),
     ("mock provider", ValidateMockAsync),
     ("native frame UTF-8 round-trip", ValidateFramingAsync),
@@ -150,6 +151,31 @@ static Task ValidateSharedFavoritesAsync()
         "Favorites CSV did not round-trip.");
     return Task.CompletedTask;
 }
+static Task ValidateTranslationDisplayAsync()
+{
+    var word = new TranslationResult(
+        "word-result",
+        "granted",
+        "授予；批准",
+        TextKind.Word,
+        "chrome-local-bridge",
+        "/ˈɡrɑːntɪd/");
+    Assert(
+        TranslationDisplay.Format(word) ==
+        $"/ˈɡrɑːntɪd/{Environment.NewLine}授予；批准",
+        "A word result must display its phonetic before the Chinese translation.");
+
+    var sentence = word with
+    {
+        OriginalText = "Permission was granted.",
+        TextKind = TextKind.Sentence,
+    };
+    Assert(
+        TranslationDisplay.Format(sentence) == "授予；批准",
+        "Sentence results must not prepend a word phonetic.");
+    return Task.CompletedTask;
+}
+
 static async Task ValidateMockAsync()
 {
     var provider = new MockTranslationProvider();
