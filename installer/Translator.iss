@@ -63,13 +63,11 @@ end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
-  { Prevent Chrome from immediately restarting the old Native Host. }
-  RunHiddenAndWait(
-    ExpandConstant('{sys}\reg.exe'),
-    'delete "HKCU\Software\Google\Chrome\NativeMessagingHosts\com.wq5881898.translator.stage2" /f');
-  RunHiddenAndWait(
-    ExpandConstant('{sys}\reg.exe'),
-    'delete "HKCU\Software\WOW6432Node\Google\Chrome\NativeMessagingHosts\com.wq5881898.translator.stage2" /f');
+  { Keep the registry entry stable. Removing only the manifest prevents Chrome
+    from restarting the old Native Host while upgrade files are replaced. }
+  DeleteFile(
+    ExpandConstant(
+      '{localappdata}\Translator\bridge\com.wq5881898.translator.stage2.json'));
 
   { Release application and runtime files before an in-place upgrade. }
   RunHiddenAndWait(
