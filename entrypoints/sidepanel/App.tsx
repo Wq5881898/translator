@@ -76,6 +76,7 @@ export function App() {
   const [speaking, setSpeaking] = useState(false);
   const requestId = useRef(0);
   const speechRequestId = useRef(0);
+  const sharedFavoritesConnected = useRef(false);
 
   async function performTranslation(selectionState: SelectionTranslation) {
     const currentRequest = ++requestId.current;
@@ -141,6 +142,7 @@ export function App() {
           const merged = mergeFavorites(sharedFavorites, browserFavorites);
           await patchSharedFavorites(merged);
           await browser.storage.local.set({ [FAVORITES_STORAGE_KEY]: merged });
+          sharedFavoritesConnected.current = true;
           if (active) setFavorites(merged);
         } catch {
           if (active) {
@@ -255,8 +257,15 @@ export function App() {
       try {
         const shared = await readSharedFavorites();
         if (!active) return;
-        setFavorites(shared);
-        await browser.storage.local.set({ [FAVORITES_STORAGE_KEY]: shared });
+        const synchronized = sharedFavoritesConnected.current
+          ? shared
+          : mergeFavorites(shared, favorites);
+        const result = sharedFavoritesConnected.current
+          ? synchronized
+          : await patchSharedFavorites(synchronized);
+        sharedFavoritesConnected.current = true;
+        setFavorites(result);
+        await browser.storage.local.set({ [FAVORITES_STORAGE_KEY]: result });
       } catch {
         // Existing favorites remain usable while the bridge is unavailable.
       }

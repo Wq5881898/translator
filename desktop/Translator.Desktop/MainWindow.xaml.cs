@@ -16,8 +16,29 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         SourceInitialized += OnSourceInitialized;
+        Loaded += OnLoaded;
+        Activated += OnActivated;
         Closed += OnClosed;
         _hotKey.Pressed += OnHotKeyPressed;
+    }
+
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            BridgeRegistrationService.EnsureRegistered();
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text =
+                $"Chrome bridge setup failed: {FriendlyError(exception)} Re-extract the complete package.";
+        }
+        await RefreshFavoriteCountAsync();
+    }
+
+    private async void OnActivated(object? sender, EventArgs e)
+    {
+        await RefreshFavoriteCountAsync();
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)
@@ -173,7 +194,7 @@ public partial class MainWindow : Window
         {
             StatusText.Text =
                 $"Translation could not start: {health.Message} " +
-                "Keep Chrome open, enable the Translator extension, run bridge\\install-bridge.ps1, then retry.";
+                "Keep Chrome open, enable the Translator extension, then retry.";
             return;
         }
 
@@ -223,6 +244,7 @@ public partial class MainWindow : Window
                 StatusText.Text = "Saved to the shared local favorites.";
             }
             await RefreshFavoriteButtonAsync();
+            await RefreshFavoriteCountAsync();
         }
         catch (Exception exception)
         {
@@ -235,6 +257,7 @@ public partial class MainWindow : Window
         var window = new FavoritesWindow { Owner = this };
         window.ShowDialog();
         await RefreshFavoriteButtonAsync();
+        await RefreshFavoriteCountAsync();
     }
 
     private async Task RefreshFavoriteButtonAsync()
@@ -253,6 +276,19 @@ public partial class MainWindow : Window
         FavoriteButton.Foreground = saved
             ? System.Windows.Media.Brushes.Crimson
             : System.Windows.Media.Brushes.Black;
+    }
+
+    private async Task RefreshFavoriteCountAsync()
+    {
+        try
+        {
+            var favorites = await SharedFavoriteStore.LoadAsync();
+            FavoritesButton.Content = $"Favorites ({favorites.Count})";
+        }
+        catch
+        {
+            FavoritesButton.Content = "Favorites (?)";
+        }
     }
 
     private void CopyEnglishButton_Click(object sender, RoutedEventArgs e)

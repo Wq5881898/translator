@@ -39,7 +39,7 @@
                     ToolTip="Save or remove current translation" Content="♡"
                     IsEnabled="False"/>
             <Button x:Name="FavoritesButton" Margin="10,0,0,0"
-                    Click="FavoritesButton_Click" Content="Favorites"/>
+                    Click="FavoritesButton_Click" Content="Favorites (0)"/>
         </WrapPanel>
 
         <Grid Grid.Row="2">
