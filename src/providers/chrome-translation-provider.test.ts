@@ -75,7 +75,7 @@ describe('ChromeTranslationProvider', () => {
       return translations[text] ?? `unexpected:${text}`;
     });
     const translatorApi: BuiltInTranslatorApi = {
-      availability: vi.fn(async () => 'available'),
+      availability: vi.fn(async () => 'available' as const),
       create: vi.fn(async () => ({ translate })),
     };
     const dictionaryFetcher = vi.fn(async (url: string) => {
