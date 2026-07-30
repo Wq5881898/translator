@@ -319,3 +319,17 @@ CI 使用 Inno Setup 生成 `Translator-Setup.exe`。安装程序按当前用户
 Bridge 注册，但默认保留 `%LOCALAPPDATA%\Translator\favorites.json`，避免误删
 学习记录。CI 必须静默安装、验证文件与注册表，再静默卸载后才发布安装包。
 
+### 9.5 收藏即时反馈、Bridge 自愈与音标展示
+
+浏览器收藏采用“本地先成功、共享库后同步”的交互：用户点击爱心后，先写入
+`chrome.storage.local` 并立即刷新爱心和数量；随后把 `upsert/removeIds` 放入串行后台队列提交给
+Native Host。Bridge 暂时不可用时保留 `dirty=true`，不回滚用户刚才的操作；后续聚焦、打开收藏页或
+`Sync now` 再补交。只有最后一次排队变更完成后才把共享库快照设为权威数据，避免快速连续点击时旧响应覆盖新状态。
+
+安装器除 `[Registry]` 双视图声明外，在安装完成阶段再次使用 Inno Setup Registry API 分别写入并验证
+64 位和 32 位 HKCU Native Messaging 项；写入失败时安装明确报错，不发布“文件存在但 Bridge 未注册”的半完成状态。
+桌面程序启动、重新激活及翻译前仍保留二次自检和自愈。
+
+浏览器主翻译结果中的音标与中文翻译使用相同的字号、字重和绿色，避免音标过小。桌面端收到单词结果且
+Provider 返回音标时，中文结果框按“音标换行中文释义”展示；句子和段落不添加单词音标。收藏数据仍分别保存
+`phonetic` 与 `translatedText`，不会把展示换行写入 CSV 或共享 JSON。
