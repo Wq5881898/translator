@@ -1,9 +1,8 @@
 name: Stage 2 Batch D
 
 on:
-  push:
-    branches: ['stage2/batch-d']
   pull_request:
+    branches: ['stage2/batch-c']
     paths:
       - 'desktop/**'
       - 'src/core/stage2-bridge*'
