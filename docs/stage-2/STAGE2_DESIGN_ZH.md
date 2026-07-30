@@ -343,3 +343,19 @@ Chrome 的 Native Messaging 长连接可能让旧版 `Translator.BridgeHost.exe`
 
 CI 的发布门禁必须先完成一次全新安装，再以重定向标准输入的方式保持旧 Bridge Host 运行并锁定运行库，随后执行第二次
 静默覆盖安装；只有旧进程被停止、覆盖成功、Bridge 注册恢复且最终卸载成功时才上传安装包。
+
+## 9.7 原生桥接并发模型与收藏同步故障修复
+
+桌面翻译通过持久 Native Messaging 连接保持一个 Bridge Host，并由该进程监听桌面命名管道。收藏读取、合并与增量写入使用浏览器的短连接 Native Messaging 请求，因此翻译和收藏可能同时启动不同的 Bridge Host 进程。
+
+Bridge Host 的命名管道必须允许多个服务端实例。若限制为 1，持久翻译进程占用唯一实例后，收藏短连接进程会在读取 `favorites.read` / `favorites.patch` 前因“所有管道实例都在使用中”退出，表现为翻译正常但收藏始终停留在浏览器本地。当前实现使用 `NamedPipeServerStream.MaxAllowedServerInstances`，使翻译与收藏请求可并行处理。
+
+同步仍采用本地优先和有限重试：
+
+- 浏览器收藏先写入 `browser.storage.local`，不等待 Windows Bridge；
+- Bridge 可用时按稳定 ID 合并浏览器库与 `%LOCALAPPDATA%\Translator\favorites.json`；
+- 插件打开、重新获得焦点、收藏变更和用户点击“Sync now”时触发同步；
+- 启动重试仅使用 0、1、3、6、10 秒的有限序列，离线时停止，不持续轮询；
+- Bridge 恢复后由下一次焦点、收藏变更或手动同步事件重新连接；
+- 自动化回归会在一个翻译 Bridge Host 保持运行时，并行启动收藏 Bridge Host 并读取共享库，防止并发实例限制再次出现。
+
