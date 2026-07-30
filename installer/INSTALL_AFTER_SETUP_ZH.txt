@@ -1,0 +1,23 @@
+Translator 安装后操作
+=====================
+
+Windows 桌面程序、OCR、Bridge Host 和浏览器插件已经安装到固定目录。
+Bridge 注册由安装程序和桌面程序自动完成，不需要运行 PowerShell。
+
+浏览器插件仍需在 Chrome 中加载一次：
+
+1. 打开 chrome://extensions
+2. 开启右上角“开发者模式”
+3. 点击“加载已解压的扩展程序”
+4. 选择下面的文件夹：
+
+   %LOCALAPPDATA%\Programs\Translator\extension
+
+加载后不要移动或删除该文件夹。以后升级请直接运行新版 Translator-Setup.exe。
+
+收藏数据保存在：
+
+   %LOCALAPPDATA%\Translator\favorites.json
+
+卸载程序默认保留收藏数据，避免误删学习记录。
+
