@@ -66,6 +66,23 @@ jobs:
           if (-not $manifestPath -or -not (Test-Path $manifestPath)) { throw 'Installer did not register the Chrome bridge.' }
           $manifest = Get-Content -Raw -Encoding UTF8 $manifestPath | ConvertFrom-Json
           if (-not (Test-Path $manifest.path)) { throw 'Registered Bridge Host path is invalid.' }
+          $bridgeStart = [System.Diagnostics.ProcessStartInfo]::new()
+          $bridgeStart.FileName = $manifest.path
+          $bridgeStart.UseShellExecute = $false
+          $bridgeStart.RedirectStandardInput = $true
+          $bridgeStart.CreateNoWindow = $true
+          $lockedBridge = [System.Diagnostics.Process]::new()
+          $lockedBridge.StartInfo = $bridgeStart
+          if (-not $lockedBridge.Start()) { throw 'Could not start the upgrade lock simulation.' }
+          Start-Sleep -Seconds 1
+          if ($lockedBridge.HasExited) { throw 'Bridge Host exited before the upgrade test.' }
+          $upgrade = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait -PassThru
+          if ($upgrade.ExitCode -ne 0) { throw "In-place upgrade failed with exit code $($upgrade.ExitCode)." }
+          $lockedBridge.Refresh()
+          if (-not $lockedBridge.HasExited) { throw 'The installer did not stop the running Bridge Host.' }
+          $upgradeKey = Get-Item 'HKCU:\Software\Google\Chrome\NativeMessagingHosts\com.wq5881898.translator.stage2'
+          $upgradeManifestPath = $upgradeKey.GetValue('')
+          if (-not $upgradeManifestPath -or -not (Test-Path $upgradeManifestPath)) { throw 'In-place upgrade did not restore the Chrome bridge registration.' }
           $uninstaller = Join-Path $installRoot 'unins000.exe'
           $uninstall = Start-Process -FilePath $uninstaller -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
           if ($uninstall.ExitCode -ne 0) { throw "Silent uninstall failed with exit code $($uninstall.ExitCode)." }
