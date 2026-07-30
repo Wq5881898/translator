@@ -326,8 +326,8 @@ Bridge 注册，但默认保留 `%LOCALAPPDATA%\Translator\favorites.json`，避
 Native Host。Bridge 暂时不可用时保留 `dirty=true`，不回滚用户刚才的操作；后续聚焦、打开收藏页或
 `Sync now` 再补交。只有最后一次排队变更完成后才把共享库快照设为权威数据，避免快速连续点击时旧响应覆盖新状态。
 
-安装器除 `[Registry]` 双视图声明外，在安装完成阶段再次使用 Inno Setup Registry API 分别写入并验证
-64 位和 32 位 HKCU Native Messaging 项；写入失败时安装明确报错，不发布“文件存在但 Bridge 未注册”的半完成状态。
+安装器除 `[Registry]` 双视图声明外，在文件复制完成后还会调用桌面程序的 `--register-bridge` 自检命令；该命令使用 .NET RegistryView 分别写入并回读
+64 位和 32 位 HKCU Native Messaging 项。命令返回非零代码时安装明确报错，不发布“文件存在但 Bridge 未注册”的半完成状态。
 桌面程序启动、重新激活及翻译前仍保留二次自检和自愈。
 
 浏览器主翻译结果中的音标与中文翻译使用相同的字号、字重和绿色，避免音标过小。桌面端收到单词结果且
