@@ -41,6 +41,15 @@ Bridge Host，不再要求手动运行 PowerShell。Chrome 扩展页仍显示 `1
 17. Bridge 可用时重新加载插件，确认启动阶段自动连接；原浏览器收藏只迁移一次，
     桌面端已经删除的条目不会被浏览器旧快照重新添加。
 18. 快速连续触发窗口聚焦和可见性变化，确认只执行一个同步任务，界面仍可操作。
+19. 导出 CSV，确认每行 `First saved` 只有 `YYYY-MM-DD`；重新导入该文件仍成功。
+20. 单独翻译 `granted`，确认首个含义为“授予/批准”一类核心义，并显示词典生成的
+    其他常见释义，而不是只显示“倘若”。
+21. 删除 Native Messaging 注册项后点击插件 `Sync now`，确认收藏页显示具体失败
+    原因；重新激活桌面程序后再次同步，确认注册恢复且两端收藏合并。
+22. 运行 `Translator-Setup.exe`，确认无需管理员权限和 PowerShell；安装后桌面
+    快捷方式可启动，Bridge 注册路径指向固定安装目录。
+23. 在 Chrome 加载 `%LOCALAPPDATA%\Programs\Translator\extension`，完成浏览器
+    与桌面收藏同步；运行卸载程序后确认应用和 Bridge 被移除、收藏 JSON 被保留。
 
 ## 数据位置
 
