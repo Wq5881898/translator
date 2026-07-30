@@ -92,8 +92,10 @@ h1 {
 }
 
 .phonetic {
-  color: #607066;
-  font-family: ui-monospace, monospace;
+  color: #246b45;
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 700;
 }
 
 .result {
