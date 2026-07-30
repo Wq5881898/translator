@@ -333,3 +333,13 @@ Native Host。Bridge 暂时不可用时保留 `dirty=true`，不回滚用户刚�
 浏览器主翻译结果中的音标与中文翻译使用相同的字号、字重和绿色，避免音标过小。桌面端收到单词结果且
 Provider 返回音标时，中文结果框按“音标换行中文释义”展示；句子和段落不添加单词音标。收藏数据仍分别保存
 `phonetic` 与 `translatedText`，不会把展示换行写入 CSV 或共享 JSON。
+
+### 9.6 覆盖安装与文件占用处理
+
+Chrome 的 Native Messaging 长连接可能让旧版 `Translator.BridgeHost.exe` 及其 .NET 运行库在后台保持占用，即使桌面窗口已经退出。
+覆盖安装开始前，安装器先暂时删除当前用户 32/64 位 Bridge 注册入口，阻止 Chrome 立即重启旧 Host；随后停止旧
+`Translator.BridgeHost.exe` 和 `Translator.Desktop.exe`，等待文件句柄释放后再覆盖文件。安装完成阶段重新生成清单，
+调用 `--register-bridge` 写入并回读注册表。该流程不要求关闭整个 Chrome，也不删除收藏文件。
+
+CI 的发布门禁必须先完成一次全新安装，再以重定向标准输入的方式保持旧 Bridge Host 运行并锁定运行库，随后执行第二次
+静默覆盖安装；只有旧进程被停止、覆盖成功、Bridge 注册恢复且最终卸载成功时才上传安装包。
