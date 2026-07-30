@@ -205,16 +205,19 @@ PowerShell Registry Provider 中，名为 `(default)` 的属性并不等于注�
 ## 8. Batch E 共享收藏库
 
 桌面端和浏览器插件以 `%LOCALAPPDATA%\Translator\favorites.json` 作为共同数据源。
-Native Host 只处理 `favorites.read` 和 `favorites.write` 两类本地协议消息，不接收
+Native Host 只处理 `favorites.read`、`favorites.write` 和 `favorites.patch`
+本地协议消息，不接收
 截图，也不上传收藏。写入时先生成临时文件，再原子替换正式文件。
 
 收藏结构与第一阶段保持兼容：`id`、`kind`、`originalText`、
 `translatedText`、`firstFavoritedAt` 和可选 `phonetic`。插件启动时把原有
 `chrome.storage.local` 收藏与共享文件按稳定 ID 合并，从而自动迁移旧数据。
-Native Host 暂不可用时，插件仍保存到浏览器本地，并在下次启动时重试同步。
+Native Host 暂不可用时，插件仍保存到浏览器本地，并记录待同步状态。
 
 桌面主界面只显示爱心按钮和 `Favorites` 入口。收藏列表在独立窗口中按需打开，
-支持删除、CSV 导入和 CSV 导出。CSV 列名继续与第一阶段一致：
+支持单选或 Ctrl/Shift 多选批量删除、CSV 导入和 CSV 导出。批量删除把所有选中
+ID 放进同一次 `favorites.patch`，避免逐条写入产生中间状态。CSV 列名继续与
+第一阶段一致：
 `Type, English, Phonetic, Chinese translation, First saved`。
 
 ### 8.1 收藏一致性与刷新
@@ -222,20 +225,46 @@ Native Host 暂不可用时，插件仍保存到浏览器本地，并在下次�
 收藏修改通过 `favorites.patch` 增量协议提交，只携带新增/更新项目和删除 ID，
 不再整表覆盖。共享文件写入由跨进程信号量串行化，并继续使用临时文件原子替换。
 
-插件在收藏面板首次打开、浏览器侧边栏重新获得焦点或从隐藏恢复时读取一次共享库。
+插件在收藏面板打开、浏览器侧边栏重新获得焦点或从隐藏恢复时读取一次共享库。
 其余时间不轮询，因此不会影响划词翻译或常驻性能。桌面收藏窗口每次打开及完成
 导入、删除后重新读取共享库。
 
 桌面程序启动时根据自身所在测试包自动定位相邻的 `bridge-host`，在当前用户
 `HKCU` 下创建或更新 Chrome Native Messaging 注册项，并把清单写入
 `%LOCALAPPDATA%\Translator\bridge`。该过程不需要管理员权限，也不再依赖用户
-手动运行 PowerShell。插件曾在桥接不可用期间保存的浏览器收藏，会在首次恢复
-连接时与共享库合并一次。
+手动运行 PowerShell。
 
-### 8.2 主界面操作布局
+### 8.2 离线优先与自动恢复状态机
+
+插件保存 `migrationCompleted` 和 `dirty` 两个本地同步标记：
+
+- `migrationCompleted=false`：尚未把原浏览器收藏迁移到共享库；
+- `dirty=true`：Bridge 不可用期间浏览器收藏发生过增删或导入；
+- `migrationCompleted=true, dirty=false`：共享库是当前权威数据源。
+
+侧边栏启动后立即尝试连接，并按 `0/1/3/6/10` 秒延迟最多尝试五次，总窗口约
+20 秒。全部失败后立即停止，不设置定时轮询，也不影响翻译和浏览器本地收藏。
+Bridge 恢复后，由以下离散事件触发单次重连：侧边栏重新聚焦、页面从隐藏恢复、
+打开收藏面板、收藏增删或导入，以及用户点击 `Sync now`。
+自动事件之间有 30 秒冷却时间；打开收藏面板和 `Sync now` 属于用户明确操作，可
+跳过冷却时间。冷却只比较时间戳，不创建后台计时器。
+
+首次迁移或 `dirty=true` 时，将浏览器收藏与共享收藏按稳定 ID 去重合并，再通过
+一次 `favorites.patch` 写回；成功后设置 `migrationCompleted=true`、
+`dirty=false`。已经完成迁移且没有离线修改时，直接以共享库为准，从而保留桌面端
+删除操作，不会被浏览器旧快照重新添加。同步失败只把状态切换为
+`Browser storage · sync paused`；成功则显示 `Shared with the Windows app`。
+并发触发共享同一个进行中的同步任务，避免重复 Native Messaging 请求。
+
+Windows 程序不会持续唤醒 Chrome。其职责是启动时自动恢复 Native Host 注册；
+插件在下一次上述用户事件中发现 Bridge 已可用并自动完成合并。这种事件触发方案
+保证只使用浏览器插件时没有无限重试或常驻资源消耗。
+
+### 8.3 主界面操作布局
 
 英文和中文文本框的标题行右上角各放置独立复制按钮。英文按钮复制 OCR 后可编辑
 文本，中文按钮复制翻译结果。设置入口使用带工具提示的齿轮图标，避免长文本按钮
 占用操作区宽度。
 
 `Favorites` 按钮显示共享收藏总数，并在窗口激活、收藏增删和关闭收藏列表后更新。
+
