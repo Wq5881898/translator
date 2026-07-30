@@ -26,10 +26,29 @@ public partial class FavoritesWindow : Window
 
     private async void Remove_Click(object sender, RoutedEventArgs e)
     {
-        if (FavoritesGrid.SelectedItem is not FavoriteEntry selected) return;
-        await SharedFavoriteStore.PatchAsync([], [selected.Id]);
-        await ReloadAsync();
-        StatusText.Text = "Favorite removed.";
+        var selectedIds = FavoritesGrid.SelectedItems
+            .OfType<FavoriteEntry>()
+            .Select(item => item.Id)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (selectedIds.Length == 0)
+        {
+            StatusText.Text = "Select one or more favorites to remove.";
+            return;
+        }
+
+        try
+        {
+            await SharedFavoriteStore.PatchAsync([], selectedIds);
+            await ReloadAsync();
+            StatusText.Text = selectedIds.Length == 1
+                ? "1 favorite removed."
+                : $"{selectedIds.Length} favorites removed.";
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text = $"Remove failed: {exception.Message}";
+        }
     }
 
     private async void Import_Click(object sender, RoutedEventArgs e)
@@ -71,3 +90,4 @@ public partial class FavoritesWindow : Window
         }
     }
 }
+
