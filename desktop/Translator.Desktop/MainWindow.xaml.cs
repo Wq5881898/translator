@@ -160,7 +160,7 @@ public partial class MainWindow : Window
 
         try
         {
-            Clipboard.SetText(TranslatedText.Text);
+            System.Windows.Clipboard.SetText(TranslatedText.Text);
             StatusText.Text = "Chinese translation copied.";
         }
         catch (Exception exception)
