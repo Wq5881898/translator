@@ -84,6 +84,7 @@ export function App() {
   const [favoritesSyncStatus, setFavoritesSyncStatus] = useState<
     'syncing' | 'shared' | 'browser'
   >('browser');
+  const [favoritesSyncError, setFavoritesSyncError] = useState<string>();
   const requestId = useRef(0);
   const speechRequestId = useRef(0);
   const favoritesRef = useRef<FavoriteEntry[]>([]);
@@ -128,6 +129,7 @@ export function App() {
     lastSharedSyncAttemptAt.current = Date.now();
     const operation = (async () => {
       setFavoritesSyncStatus('syncing');
+      setFavoritesSyncError(undefined);
       try {
         const synchronize = () =>
           synchronizeFavorites({
@@ -141,8 +143,13 @@ export function App() {
           : await synchronize();
         await saveFavoritesSnapshot(result.favorites, result.metadata);
         setFavoritesSyncStatus('shared');
-      } catch {
+      } catch (error) {
         setFavoritesSyncStatus('browser');
+        setFavoritesSyncError(
+          error instanceof Error
+            ? error.message
+            : 'The Windows favorites bridge could not be reached.',
+        );
       }
     })().finally(() => {
       favoritesSyncInFlight.current = null;
@@ -551,6 +558,11 @@ export function App() {
                       ? 'Checking shared favorites…'
                       : 'Browser storage · sync paused'}
                 </span>
+                {favoritesSyncError ? (
+                  <span className="error">
+                    Sync failed: {favoritesSyncError}
+                  </span>
+                ) : null}
               </div>
               <button
                 className="link-button"
