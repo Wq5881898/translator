@@ -7,8 +7,14 @@ on:
       - 'desktop/**'
       - 'src/core/**'
       - 'entrypoints/**'
+      - 'installer/**'
+      - 'docs/stage-2/**'
       - 'wxt.config.ts'
       - '.github/workflows/stage2-batch-e.yml'
+
+concurrency:
+  group: stage2-batch-e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:
@@ -42,6 +48,27 @@ jobs:
           Copy-Item docs/stage-2/STAGE2_DESIGN_ZH.md staging/
           Copy-Item THIRD_PARTY_NOTICES.md staging/
           Copy-Item .output/chrome-mv3 staging/extension -Recurse
+      - name: Build and validate single-file installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { throw 'Inno Setup 6 is not available on the Windows runner.' }
+          & $iscc installer/Translator.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE." }
+          $setup = Resolve-Path installer-output/Translator-Setup.exe
+          $process = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Silent installation failed with exit code $($process.ExitCode)." }
+          $installRoot = Join-Path $env:LOCALAPPDATA 'Programs\Translator'
+          if (-not (Test-Path (Join-Path $installRoot 'desktop\Translator.Desktop.exe'))) { throw 'Installed desktop executable is missing.' }
+          if (-not (Test-Path (Join-Path $installRoot 'extension\manifest.json'))) { throw 'Installed extension is missing.' }
+          $key = Get-Item 'HKCU:\Software\Google\Chrome\NativeMessagingHosts\com.wq5881898.translator.stage2'
+          $manifestPath = $key.GetValue('')
+          if (-not $manifestPath -or -not (Test-Path $manifestPath)) { throw 'Installer did not register the Chrome bridge.' }
+          $manifest = Get-Content -Raw -Encoding UTF8 $manifestPath | ConvertFrom-Json
+          if (-not (Test-Path $manifest.path)) { throw 'Registered Bridge Host path is invalid.' }
+          $uninstaller = Join-Path $installRoot 'unins000.exe'
+          $uninstall = Start-Process -FilePath $uninstaller -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "Silent uninstall failed with exit code $($uninstall.ExitCode)." }
       - name: Validate Chrome bridge registration
         shell: pwsh
         run: |
@@ -54,3 +81,9 @@ jobs:
           name: translator-stage2-batch-e
           path: staging
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: translator-stage2-installer
+          path: installer-output/Translator-Setup.exe
+          if-no-files-found: error
+
