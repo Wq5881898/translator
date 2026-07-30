@@ -21,7 +21,8 @@
             </StackPanel>
         </DockPanel>
         <DataGrid x:Name="FavoritesGrid" Grid.Row="1" AutoGenerateColumns="False"
-                  IsReadOnly="True" CanUserAddRows="False">
+                  IsReadOnly="True" CanUserAddRows="False"
+                  SelectionMode="Extended" SelectionUnit="FullRow">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Type" Binding="{Binding Kind}" Width="80"/>
                 <DataGridTextColumn Header="English" Binding="{Binding OriginalText}" Width="2*"/>
@@ -37,3 +38,4 @@
         </DockPanel>
     </Grid>
 </Window>
+
