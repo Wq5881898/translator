@@ -268,3 +268,54 @@ Windows 程序不会持续唤醒 Chrome。其职责是启动时自动恢复 Nati
 
 `Favorites` 按钮显示共享收藏总数，并在窗口激活、收藏增删和关闭收藏列表后更新。
 
+## 9. Batch E 最终交付补充
+
+### 9.1 Bridge 注册可靠性
+
+安装程序在当前用户的 64 位和 32 位注册表视图中写入 Native Messaging Host，
+桌面程序启动、重新激活及翻译前也会执行回读验证和自恢复。注册成功必须同时满足：
+
+1. 注册表默认值存在；
+2. 默认值指向的 JSON 清单存在；
+3. 清单中的 Host 绝对路径存在；
+4. `allowed_origins` 只包含固定扩展 ID。
+
+清单已经生成但注册表写入失败时，桌面状态区显示具体注册错误。插件收藏页的
+`Sync now` 不再只保留 `sync paused`，而是在当前页面显示 Chrome 返回的 Native
+Messaging 错误，方便区分注册缺失、扩展 ID 不一致和 Host 无法启动。
+
+### 9.2 单词词典式翻译
+
+句子和段落继续直接使用 Chrome 本地 `en → zh` 翻译。单个单词先调用免费开放的
+Dictionary API 获取音标、词形和英文释义；常见 `-ed`、`-ing`、复数等词形会优先
+回查词典原形。随后仅把词典原形和最多两个英文释义交给 Chrome 本地模型翻译，
+去重后展示最多三个中文常用义。
+
+例如 `granted` 会优先按原形 `grant` 得到“授予、批准”等核心义，再补充词典释义，
+不会只把脱离上下文的过去分词解释成连接语“倘若”。词典不可访问时自动退回原有
+Chrome 单词翻译，不阻塞基本功能。该流程不使用付费 API，也不上传网页或截图。
+
+### 9.3 CSV 日期
+
+共享 JSON 内仍保存完整首次收藏时间，用于去重和历史兼容；CSV 导出时
+`First saved` 统一截取为 `YYYY-MM-DD`。导入同时兼容旧版完整 ISO 时间和新版
+日期格式。
+
+### 9.4 单文件安装程序
+
+CI 使用 Inno Setup 生成 `Translator-Setup.exe`。安装程序按当前用户安装到
+`%LOCALAPPDATA%\Programs\Translator`，包含桌面程序、OCR 模型、Bridge Host、
+配套浏览器插件和文档，并完成 Bridge 双注册表视图注册、开始菜单及桌面快捷方式。
+不要求管理员权限，也不运行 PowerShell。
+
+由于开发者模式扩展不能由普通安装程序静默装入 Chrome，用户仍需在
+`chrome://extensions` 中加载一次固定目录：
+
+```text
+%LOCALAPPDATA%\Programs\Translator\extension
+```
+
+以后升级只需运行新版安装程序，不再重新选择临时下载目录。卸载程序删除应用和
+Bridge 注册，但默认保留 `%LOCALAPPDATA%\Translator\favorites.json`，避免误删
+学习记录。CI 必须静默安装、验证文件与注册表，再静默卸载后才发布安装包。
+
