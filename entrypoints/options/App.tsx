@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react';
 
 import { FAVORITES_STORAGE_KEY } from '../../src/core/favorites';
+import { FAVORITES_SYNC_METADATA_KEY } from '../../src/core/favorites-sync';
 import {
   normalizeSettings,
   TRANSLATOR_SETTINGS_KEY,
@@ -90,6 +91,7 @@ export function App() {
       await browser.storage.local.remove([
         TRANSLATOR_SETTINGS_KEY,
         FAVORITES_STORAGE_KEY,
+        FAVORITES_SYNC_METADATA_KEY,
       ]);
       setSettings(EMPTY_SETTINGS);
       setClearArmed(false);
@@ -197,3 +199,4 @@ export function App() {
     </main>
   );
 }
+
