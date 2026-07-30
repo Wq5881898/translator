@@ -1,7 +1,7 @@
 # Translator 第二阶段设计方案
 
-文档版本：1.1  
-最后更新：2026-07-29  
+文档版本：1.2  
+最后更新：2026-07-30  
 维护基线：`Wq5881898/translator`
 
 ## 1. 阶段边界
@@ -337,9 +337,9 @@ Provider 返回音标时，中文结果框按“音标换行中文释义”展�
 ### 9.6 覆盖安装与文件占用处理
 
 Chrome 的 Native Messaging 长连接可能让旧版 `Translator.BridgeHost.exe` 及其 .NET 运行库在后台保持占用，即使桌面窗口已经退出。
-覆盖安装开始前，安装器先暂时删除当前用户 32/64 位 Bridge 注册入口，阻止 Chrome 立即重启旧 Host；随后停止旧
-`Translator.BridgeHost.exe` 和 `Translator.Desktop.exe`，等待文件句柄释放后再覆盖文件。安装完成阶段重新生成清单，
-调用 `--register-bridge` 写入并回读注册表。该流程不要求关闭整个 Chrome，也不删除收藏文件。
+覆盖安装开始前保留当前用户 32/64 位 Bridge 注册入口，只临时移除 Native Messaging manifest，阻止 Chrome 在旧 Host 退出后立即重启它；随后停止旧
+`Translator.BridgeHost.exe` 和 `Translator.Desktop.exe`，等待文件句柄释放后再覆盖文件。安装完成阶段重新生成 manifest，
+调用 `--register-bridge` 写入、回读并验证注册表。该流程不要求关闭整个 Chrome，不制造安装后注册缺失的状态，也不删除收藏文件。
 
 CI 的发布门禁必须先完成一次全新安装，再以重定向标准输入的方式保持旧 Bridge Host 运行并锁定运行库，随后执行第二次
 静默覆盖安装；只有旧进程被停止、覆盖成功、Bridge 注册恢复且最终卸载成功时才上传安装包。
@@ -358,4 +358,96 @@ Bridge Host 的命名管道必须允许多个服务端实例。若限制为 1，
 - 启动重试仅使用 0、1、3、6、10 秒的有限序列，离线时停止，不持续轮询；
 - Bridge 恢复后由下一次焦点、收藏变更或手动同步事件重新连接；
 - 自动化回归会在一个翻译 Bridge Host 保持运行时，并行启动收藏 Bridge Host 并读取共享库，防止并发实例限制再次出现。
+
+## 10. 两阶段交付关系与代码边界
+
+第一阶段是独立浏览器插件。第二阶段是 Windows Desktop、Bridge Host 和配套浏览器插件的组合；配套插件继承第一阶段主要能力并增加桥接和共享收藏，但两个阶段仍是独立发布基线。
+
+建议最终只长期维护 `release/stage1-final` 与 `release/stage2-final`。清理历史批次分支前，必须确认最终分支、标签、安装包提交和文档均可追溯；分支删除属于单独的破坏性维护操作，不与功能修复混合。
+
+## 11. 第二阶段维护文件与职责总表
+
+### 11.1 浏览器插件
+
+| 路径 | 具体职责 |
+|---|---|
+| `entrypoints/background.ts` | 后台消息、右键翻译与 Chrome 翻译桥接 |
+| `entrypoints/content.ts` | 网页选区采集和自动划词 |
+| `entrypoints/sidepanel/App.tsx` | 翻译、发音、收藏、同步和错误状态 |
+| `entrypoints/sidepanel/FavoritesTransferControls.tsx` | 收藏 CSV 导入导出 |
+| `entrypoints/options/App.tsx` | 发音与备用 Provider 设置 |
+| `entrypoints/offscreen/main.ts` | 离屏调用 Chrome Translator API |
+| `src/core/stage2-bridge.ts` | 第二阶段桥接消息契约 |
+| `src/core/shared-favorites.ts` | 共享收藏 Native Messaging 调用 |
+| `src/core/favorites-sync.ts` | 首次合并、dirty 状态、有限重试和事件同步 |
+| `src/core/favorites.ts` | 收藏模型和稳定 ID |
+| `src/core/favorites-transfer.ts` | CSV、日期、校验与合并 |
+| `src/providers/translation-provider.ts` | Provider 统一接口 |
+| `src/providers/chrome-translation-provider.ts` | Chrome 本地翻译与词典增强 |
+| `src/providers/free-dictionary-provider.ts` | 免费词典、音标、词形与释义 |
+| `src/providers/azure-translation-provider.ts` | Azure 可选备用 |
+
+### 11.2 Windows 桌面程序
+
+| 路径 | 具体职责 |
+|---|---|
+| `desktop/Translator.Desktop/App.xaml.cs` | 应用启动、命令行注册和生命周期 |
+| `desktop/Translator.Desktop/MainWindow.xaml` | 主窗口布局 |
+| `desktop/Translator.Desktop/MainWindow.xaml.cs` | 截图、OCR、翻译、复制、收藏和状态编排 |
+| `desktop/Translator.Desktop/FavoritesWindow.xaml.cs` | 收藏刷新、多选删除与 CSV |
+| `desktop/Translator.Desktop/BrowserBridgeTranslationProvider.cs` | 命名管道客户端、健康检查与超时 |
+| `desktop/Translator.Desktop/BridgeRegistrationService.cs` | manifest、32/64 位注册和自愈 |
+| `desktop/Translator.Desktop/GlobalHotKeyService.cs` | 全局快捷键注册与注销 |
+| `desktop/Translator.Desktop/ShortcutSettings.cs` | 快捷键保存、读取和冲突配置 |
+| `desktop/Translator.Desktop/ScreenRegionCapture.cs` | 多屏物理像素截图 |
+| `desktop/Translator.Desktop/EnglishOcrProvider.cs` | 随包 Tesseract 双引擎 OCR |
+| `desktop/Translator.Desktop/WindowsOcrProvider.cs` | Windows OCR 备用 |
+| `desktop/Translator.Desktop/TextRules.cs` | OCR 英文、撇号和噪声清理 |
+| `desktop/Translator.Desktop/TranslationDisplay.cs` | 音标与中文显示格式 |
+
+### 11.3 Bridge、共享核心、安装与验证
+
+| 路径 | 具体职责 |
+|---|---|
+| `desktop/Translator.BridgeHost/Program.cs` | Native Messaging、并发管道、翻译转发和收藏协议 |
+| `desktop/Translator.Core/BridgeProtocol.cs` | 协议版本、消息帧和长度限制 |
+| `desktop/Translator.Core/Favorites.cs` | 共享收藏模型、锁、原子文件与 CSV |
+| `desktop/Translator.Core/Translation.cs` | 翻译请求、结果、类型和契约 |
+| `desktop/Translator.Core/Ocr.cs` | OCR 接口与结果契约 |
+| `desktop/Translator.TechnicalValidation/Program.cs` | OCR、桥接、翻译、收藏并发技术检查 |
+| `installer/Translator.iss` | 单文件安装、覆盖升级、注册和卸载 |
+| `.github/workflows/stage2-batch-e.yml` | Windows 构建、回归、安装模拟和产物 |
+| `scripts/verify-release.mjs` | 插件权限、版本和文档校验 |
+| `docs/stage-2/BATCH_E_TEST_GUIDE_ZH.md` | 最终测试步骤与实机结果 |
+| `docs/stage-2/STAGE2_DESIGN_ZH.md` | 架构、决策和问题留痕 |
+
+同名 `.test.ts` 文件保护对应 TypeScript 模块。构建目录、`bin`、`obj`、ZIP 和 Artifact 是生成物，不作为维护入口。
+
+## 12. 按问题定位文件
+
+| 问题 | 首查文件 |
+|---|---|
+| 网页不自动划词 | `entrypoints/content.ts`，消息异常再查 `background.ts` |
+| Chrome 翻译错误 | `src/providers/`、`entrypoints/offscreen/main.ts` |
+| 截图坐标、多屏或缩放 | `ScreenRegionCapture.cs` |
+| OCR 错字、撇号或中文噪声 | `EnglishOcrProvider.cs`、`TextRules.cs` |
+| 翻译一直等待 | `BrowserBridgeTranslationProvider.cs`，再查 Bridge Host |
+| Bridge 注册失败 | `BridgeRegistrationService.cs`、`installer/Translator.iss` |
+| 收藏不同步 | `favorites-sync.ts`、`shared-favorites.ts`、`Favorites.cs` |
+| 批量删除或收藏界面 | `FavoritesWindow.*` 或 `sidepanel/App.tsx` |
+| CSV 日期或格式 | `favorites-transfer.ts`、`Favorites.cs` |
+| 覆盖安装失败 | `installer/Translator.iss` |
+| 快捷键冲突 | `GlobalHotKeyService.cs`、`ShortcutSettings.cs` |
+
+固定维护流程：定位所属模块，阅读该文件和直接接口，补同模块回归测试，运行相关检查，再更新测试报告和设计记录。接口和数据模型未变化时，不扩大到无关模块。
+
+## 13. 可配置翻译库与 Provider 扩展
+
+现有架构已经将翻译来源与截图、OCR、收藏和界面分离。未来新增个人词库、本地词库、GPT 或其他云翻译时，实现统一 Provider 契约并通过设置选择或排序即可，不需要重写截图、OCR、收藏、CSV 和 Bridge。
+
+建议优先级为：个人本地词库 → 免费词典和词形解析 → Chrome 本地翻译 → 用户配置的备用 Provider。
+
+推荐新增 `src/providers/local-glossary-provider.ts`、`src/providers/provider-router.ts` 和 `src/core/glossary.ts`。配置应包含启用状态、优先级、词库位置、来源、超时和失败回退。Provider 输出继续使用统一的原文、译文、类型、来源和可选音标字段。
+
+大型词库可能需要索引与安装资源；GPT/云 API 需要用户自带 Key、成本提示、隐私说明和限流；牛津、朗文需要合法 API 或再分发授权。这些属于扩展性改造，不是颠覆性重构。禁止抓取商业词典网页打包，也不能把 ChatGPT 会员会话当作免费程序 API。
 
