@@ -109,7 +109,7 @@ public static class FavoritesCsv
         rows.AddRange(favorites.Select(item => new[]
         {
             item.Kind, item.OriginalText, item.Phonetic ?? "",
-            item.TranslatedText, item.FirstFavoritedAt
+            item.TranslatedText, ExportDate(item.FirstFavoritedAt)
         }));
         return "\uFEFF" + string.Join(
             "\r\n",
@@ -148,6 +148,11 @@ public static class FavoritesCsv
         }
         return result;
     }
+
+    private static string ExportDate(string value) =>
+        DateTimeOffset.TryParse(value, out var parsed)
+            ? parsed.ToString("yyyy-MM-dd")
+            : value.Length >= 10 ? value[..10] : value;
 
     private static string Escape(string value) =>
         value.IndexOfAny([',', '"', '\r', '\n']) >= 0
@@ -192,3 +197,4 @@ public static class FavoritesCsv
         return rows;
     }
 }
+
