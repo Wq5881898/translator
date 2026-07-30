@@ -92,6 +92,8 @@ export function App() {
     ...INITIAL_FAVORITES_SYNC_METADATA,
   });
   const favoritesSyncInFlight = useRef<Promise<void> | null>(null);
+  const favoritesPatchQueue = useRef<Promise<void>>(Promise.resolve());
+  const favoriteMutationVersion = useRef(0);
   const lastSharedSyncAttemptAt = useRef(0);
 
   function applyFavorites(nextFavorites: FavoriteEntry[]) {
@@ -288,49 +290,64 @@ export function App() {
   }, []);
 
   async function persistFavorites(nextFavorites: FavoriteEntry[]) {
-    try {
-      const nextIds = new Set(nextFavorites.map((favorite) => favorite.id));
-      const currentFavorites = favoritesRef.current;
-      const currentById = new Map(
-        currentFavorites.map((favorite) => [favorite.id, favorite]),
-      );
-      const mustUploadBrowserFallback =
-        favoritesSyncMetadata.current.dirty ||
-        !favoritesSyncMetadata.current.migrationCompleted;
-      const upsert = mustUploadBrowserFallback
-        ? nextFavorites
-        : nextFavorites.filter(
-            (favorite) =>
-              JSON.stringify(currentById.get(favorite.id)) !== JSON.stringify(favorite),
-          );
-      const removeIds = currentFavorites
-        .filter((favorite) => !nextIds.has(favorite.id))
-        .map((favorite) => favorite.id);
-      const sharedFavorites = await patchSharedFavorites(upsert, removeIds);
-      await saveFavoritesSnapshot(sharedFavorites, {
-        migrationCompleted: true,
-        dirty: false,
-      });
-      setFavoritesSyncStatus('shared');
-    } catch {
-      try {
-        await saveFavoritesSnapshot(nextFavorites, {
-          ...favoritesSyncMetadata.current,
-          dirty: true,
-        });
-        setFavoritesSyncStatus('browser');
-        setStatus(
-          'Saved in the browser. Shared-library sync will resume on the next user event.',
+    const nextIds = new Set(nextFavorites.map((favorite) => favorite.id));
+    const currentFavorites = favoritesRef.current;
+    const currentById = new Map(
+      currentFavorites.map((favorite) => [favorite.id, favorite]),
+    );
+    const mustUploadBrowserFallback =
+      favoritesSyncMetadata.current.dirty ||
+      !favoritesSyncMetadata.current.migrationCompleted;
+    const upsert = mustUploadBrowserFallback
+      ? nextFavorites
+      : nextFavorites.filter(
+          (favorite) =>
+            JSON.stringify(currentById.get(favorite.id)) !== JSON.stringify(favorite),
         );
-      } catch {
-        const message =
-          'Favorites could not be saved. Check browser storage and the local bridge, then try again.';
-        setStatus(message);
-        setFoundationResult(message);
-        setOutputIsError(true);
-        throw new Error(message);
-      }
+    const removeIds = currentFavorites
+      .filter((favorite) => !nextIds.has(favorite.id))
+      .map((favorite) => favorite.id);
+
+    try {
+      await saveFavoritesSnapshot(nextFavorites, {
+        ...favoritesSyncMetadata.current,
+        dirty: true,
+      });
+    } catch {
+      const message =
+        'Favorites could not be saved. Check browser storage and try again.';
+      setStatus(message);
+      setFoundationResult(message);
+      setOutputIsError(true);
+      throw new Error(message);
     }
+
+    const mutationVersion = ++favoriteMutationVersion.current;
+    setFavoritesSyncStatus('syncing');
+    setFavoritesSyncError(undefined);
+    favoritesPatchQueue.current = favoritesPatchQueue.current
+      .catch(() => undefined)
+      .then(async () => {
+        try {
+          const sharedFavorites = await patchSharedFavorites(upsert, removeIds);
+          if (mutationVersion === favoriteMutationVersion.current) {
+            await saveFavoritesSnapshot(sharedFavorites, {
+              migrationCompleted: true,
+              dirty: false,
+            });
+            setFavoritesSyncStatus('shared');
+          }
+        } catch (error) {
+          if (mutationVersion === favoriteMutationVersion.current) {
+            setFavoritesSyncStatus('browser');
+            setFavoritesSyncError(
+              error instanceof Error
+                ? error.message
+                : 'The Windows favorites bridge could not be reached.',
+            );
+          }
+        }
+      });
   }
 
   useEffect(() => {
