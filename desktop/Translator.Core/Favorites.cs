@@ -14,6 +14,7 @@ public sealed record FavoriteEntry(
 
 public static class SharedFavoriteStore
 {
+    private const string SyncName = "Local\\Wq5881898.Translator.Favorites";
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -58,6 +59,35 @@ public static class SharedFavoriteStore
             await JsonSerializer.SerializeAsync(stream, normalized, JsonOptions, cancellationToken);
         }
         File.Move(temporaryPath, StorePath, true);
+    }
+
+    public static async Task<IReadOnlyList<FavoriteEntry>> PatchAsync(
+        IEnumerable<FavoriteEntry> upsert,
+        IEnumerable<string> removeIds,
+        CancellationToken cancellationToken = default)
+    {
+        using var semaphore = new Semaphore(1, 1, SyncName);
+        if (!semaphore.WaitOne(TimeSpan.FromSeconds(5)))
+        {
+            throw new IOException("The shared favorites library is busy. Retry.");
+        }
+        try
+        {
+            var removed = removeIds.ToHashSet(StringComparer.Ordinal);
+            var merged = (await LoadAsync(cancellationToken))
+                .Where(item => !removed.Contains(item.Id))
+                .ToDictionary(item => item.Id, StringComparer.Ordinal);
+            foreach (var item in upsert.Where(IsValid))
+            {
+                merged[item.Id] = item;
+            }
+            await SaveAsync(merged.Values, cancellationToken);
+            return merged.Values.ToArray();
+        }
+        finally
+        {
+            semaphore.Release();
+        }
     }
 
     public static bool IsValid(FavoriteEntry item) =>

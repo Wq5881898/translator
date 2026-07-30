@@ -11,8 +11,8 @@ import {
 } from '../../src/core/favorites';
 import { mergeFavorites } from '../../src/core/favorites-transfer';
 import {
+  patchSharedFavorites,
   readSharedFavorites,
-  writeSharedFavorites,
 } from '../../src/core/shared-favorites';
 import {
   isExtensionMessage,
@@ -139,7 +139,7 @@ export function App() {
         try {
           const sharedFavorites = await readSharedFavorites();
           const merged = mergeFavorites(sharedFavorites, browserFavorites);
-          await writeSharedFavorites(merged);
+          await patchSharedFavorites(merged);
           await browser.storage.local.set({ [FAVORITES_STORAGE_KEY]: merged });
           if (active) setFavorites(merged);
         } catch {
@@ -214,7 +214,16 @@ export function App() {
 
   async function persistFavorites(nextFavorites: FavoriteEntry[]) {
     try {
-      const sharedFavorites = await writeSharedFavorites(nextFavorites);
+      const nextIds = new Set(nextFavorites.map((favorite) => favorite.id));
+      const currentById = new Map(favorites.map((favorite) => [favorite.id, favorite]));
+      const upsert = nextFavorites.filter(
+        (favorite) =>
+          JSON.stringify(currentById.get(favorite.id)) !== JSON.stringify(favorite),
+      );
+      const removeIds = favorites
+        .filter((favorite) => !nextIds.has(favorite.id))
+        .map((favorite) => favorite.id);
+      const sharedFavorites = await patchSharedFavorites(upsert, removeIds);
       await browser.storage.local.set({
         [FAVORITES_STORAGE_KEY]: sharedFavorites,
       });
@@ -238,6 +247,32 @@ export function App() {
       }
     }
   }
+
+  useEffect(() => {
+    if (!showFavorites) return;
+    let active = true;
+    const refresh = async () => {
+      try {
+        const shared = await readSharedFavorites();
+        if (!active) return;
+        setFavorites(shared);
+        await browser.storage.local.set({ [FAVORITES_STORAGE_KEY]: shared });
+      } catch {
+        // Existing favorites remain usable while the bridge is unavailable.
+      }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void refresh();
+    };
+    void refresh();
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      active = false;
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [showFavorites]);
 
   async function toggleCurrentFavorite() {
     const translation = latest?.translation;

@@ -43,6 +43,7 @@ while (true)
                 directRequest.RequestId,
                 new { favorites = await SharedFavoriteStore.LoadAsync() }),
             "favorites.write" => await WriteFavoritesAsync(directRequest),
+            "favorites.patch" => await PatchFavoritesAsync(directRequest),
             _ => BridgeEnvelope.Create(
                 "bridge.error",
                 directRequest.RequestId,
@@ -71,6 +72,35 @@ while (true)
     }
 
     await NativeMessageFraming.WriteAsync(pipe, extensionResponse, CancellationToken.None);
+}
+
+static async Task<BridgeEnvelope> PatchFavoritesAsync(BridgeEnvelope request)
+{
+    try
+    {
+        var upsert = request.Payload.TryGetProperty("upsert", out var upsertValue)
+            ? upsertValue.Deserialize<List<FavoriteEntry>>() ?? []
+            : [];
+        var removeIds = request.Payload.TryGetProperty("removeIds", out var removeValue)
+            ? removeValue.Deserialize<List<string>>() ?? []
+            : [];
+        if (upsert.Any(item => !SharedFavoriteStore.IsValid(item)))
+        {
+            throw new InvalidDataException("Favorites patch contains an invalid item.");
+        }
+        var favorites = await SharedFavoriteStore.PatchAsync(upsert, removeIds);
+        return BridgeEnvelope.Create(
+            "favorites.result",
+            request.RequestId,
+            new { favorites });
+    }
+    catch (Exception exception)
+    {
+        return BridgeEnvelope.Create(
+            "bridge.error",
+            request.RequestId,
+            new { code = "favorites_patch_failed", message = exception.Message });
+    }
 }
 
 static async Task<BridgeEnvelope> WriteFavoritesAsync(BridgeEnvelope request)

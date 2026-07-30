@@ -207,21 +207,21 @@ public partial class MainWindow : Window
             var existing = favorites.FindIndex(item => item.Id == id);
             if (existing >= 0)
             {
-                favorites.RemoveAt(existing);
+                await SharedFavoriteStore.PatchAsync([], [id]);
                 StatusText.Text = "Removed from favorites.";
             }
             else
             {
-                favorites.Insert(0, new FavoriteEntry(
+                var item = new FavoriteEntry(
                     id,
                     kind,
                     normalized,
                     _currentTranslation.TranslatedText,
                     DateTimeOffset.UtcNow.ToString("O"),
-                    _currentTranslation.Phonetic));
+                    _currentTranslation.Phonetic);
+                await SharedFavoriteStore.PatchAsync([item], []);
                 StatusText.Text = "Saved to the shared local favorites.";
             }
-            await SharedFavoriteStore.SaveAsync(favorites);
             await RefreshFavoriteButtonAsync();
         }
         catch (Exception exception)
@@ -255,18 +255,28 @@ public partial class MainWindow : Window
             : System.Windows.Media.Brushes.Black;
     }
 
-    private void CopyButton_Click(object sender, RoutedEventArgs e)
+    private void CopyEnglishButton_Click(object sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(TranslatedText.Text))
+        CopyText(RecognizedText.Text, "English text");
+    }
+
+    private void CopyChineseButton_Click(object sender, RoutedEventArgs e)
+    {
+        CopyText(TranslatedText.Text, "Chinese translation");
+    }
+
+    private void CopyText(string value, string description)
+    {
+        if (string.IsNullOrWhiteSpace(value))
         {
-            StatusText.Text = "There is no Chinese translation to copy.";
+            StatusText.Text = $"There is no {description.ToLowerInvariant()} to copy.";
             return;
         }
 
         try
         {
-            System.Windows.Clipboard.SetText(TranslatedText.Text);
-            StatusText.Text = "Chinese translation copied.";
+            System.Windows.Clipboard.SetText(value);
+            StatusText.Text = $"{description} copied.";
         }
         catch (Exception exception)
         {
@@ -292,7 +302,6 @@ public partial class MainWindow : Window
         _busy = busy;
         CaptureButton.IsEnabled = !busy;
         TranslateButton.IsEnabled = !busy;
-        CopyButton.IsEnabled = !busy;
         SettingsButton.IsEnabled = !busy;
         FavoriteButton.IsEnabled = !busy && _currentTranslation is not null;
         FavoritesButton.IsEnabled = !busy;

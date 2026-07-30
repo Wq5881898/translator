@@ -29,10 +29,10 @@
                     Content="Select screen region"/>
             <Button x:Name="TranslateButton" Margin="10,0,0,0"
                     Click="TranslateButton_Click" Content="Translate Chinese"/>
-            <Button x:Name="CopyButton" Margin="10,0,0,0"
-                    Click="CopyButton_Click" Content="Copy Chinese"/>
-            <Button x:Name="SettingsButton" Margin="10,0,0,0"
-                    Click="SettingsButton_Click" Content="Shortcut settings"/>
+            <Button x:Name="SettingsButton" Margin="10,0,0,0" Width="48"
+                    Padding="0" FontFamily="Segoe UI Symbol" FontSize="22"
+                    Click="SettingsButton_Click" Content="⚙"
+                    ToolTip="Settings"/>
             <Button x:Name="FavoriteButton" Margin="10,0,0,0" Width="56"
                     Padding="0" FontSize="26" FontFamily="Segoe UI Symbol"
                     HorizontalContentAlignment="Center" Click="FavoriteButton_Click"
@@ -49,11 +49,21 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="2*"/>
             </Grid.RowDefinitions>
-            <TextBlock FontWeight="SemiBold" Text="English (editable)"/>
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Width="64" Height="30" Padding="4,0"
+                        Click="CopyEnglishButton_Click" Content="Copy"/>
+                <TextBlock VerticalAlignment="Center" FontWeight="SemiBold"
+                           Text="English (editable)"/>
+            </DockPanel>
             <TextBox x:Name="RecognizedText" Grid.Row="1" Margin="0,7,0,14"
                      AcceptsReturn="True" TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto" Padding="12" FontSize="16"/>
-            <TextBlock Grid.Row="2" FontWeight="SemiBold" Text="Chinese"/>
+            <DockPanel Grid.Row="2">
+                <Button DockPanel.Dock="Right" Width="64" Height="30" Padding="4,0"
+                        Click="CopyChineseButton_Click" Content="Copy"/>
+                <TextBlock VerticalAlignment="Center" FontWeight="SemiBold"
+                           Text="Chinese"/>
+            </DockPanel>
             <TextBox x:Name="TranslatedText" Grid.Row="3" Margin="0,7,0,0"
                      IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto" Padding="12" FontSize="17"

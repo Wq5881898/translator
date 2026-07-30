@@ -43,3 +43,16 @@ export async function writeSharedFavorites(
     await browser.runtime.sendNativeMessage(STAGE2_NATIVE_HOST, request),
   );
 }
+
+export async function patchSharedFavorites(
+  upsert: FavoriteEntry[],
+  removeIds: string[] = [],
+): Promise<FavoriteEntry[]> {
+  const request = createStage2BridgeEnvelope('favorites.patch', {
+    upsert,
+    removeIds,
+  });
+  return favoritesFromResponse(
+    await browser.runtime.sendNativeMessage(STAGE2_NATIVE_HOST, request),
+  );
+}

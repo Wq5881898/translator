@@ -27,8 +27,7 @@ public partial class FavoritesWindow : Window
     private async void Remove_Click(object sender, RoutedEventArgs e)
     {
         if (FavoritesGrid.SelectedItem is not FavoriteEntry selected) return;
-        _favorites.RemoveAll(item => item.Id == selected.Id);
-        await SharedFavoriteStore.SaveAsync(_favorites);
+        await SharedFavoriteStore.PatchAsync([], [selected.Id]);
         await ReloadAsync();
         StatusText.Text = "Favorite removed.";
     }
@@ -40,12 +39,7 @@ public partial class FavoritesWindow : Window
         try
         {
             var imported = FavoritesCsv.Parse(await File.ReadAllTextAsync(dialog.FileName));
-            _favorites = _favorites
-                .Concat(imported)
-                .GroupBy(item => item.Id, StringComparer.Ordinal)
-                .Select(group => group.First())
-                .ToList();
-            await SharedFavoriteStore.SaveAsync(_favorites);
+            await SharedFavoriteStore.PatchAsync(imported, []);
             await ReloadAsync();
             StatusText.Text = "Favorites imported.";
         }
