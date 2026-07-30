@@ -74,6 +74,22 @@ begin
     '}' + #13#10;
   if not SaveStringToFile(ManifestPath, Manifest, False) then
     RaiseException('无法创建 Chrome Bridge 配置文件：' + ManifestPath);
+
+  SetRegView(64);
+  if not RegWriteStringValue(
+    HKCU,
+    'Software\Google\Chrome\NativeMessagingHosts\com.wq5881898.translator.stage2',
+    '',
+    ManifestPath) then
+    RaiseException('无法注册 64 位 Chrome Bridge。');
+  SetRegView(32);
+  if not RegWriteStringValue(
+    HKCU,
+    'Software\Google\Chrome\NativeMessagingHosts\com.wq5881898.translator.stage2',
+    '',
+    ManifestPath) then
+    RaiseException('无法注册 32 位 Chrome Bridge。');
+  SetRegView(64);
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
