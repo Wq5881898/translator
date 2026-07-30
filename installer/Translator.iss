@@ -55,6 +55,7 @@ var
   HostPath: String;
   EscapedHostPath: String;
   Manifest: String;
+  RegistrationResult: Integer;
 begin
   ManifestDirectory := ExpandConstant('{localappdata}\Translator\bridge');
   ManifestPath := ManifestDirectory + '\com.wq5881898.translator.stage2.json';
@@ -75,21 +76,16 @@ begin
   if not SaveStringToFile(ManifestPath, Manifest, False) then
     RaiseException('无法创建 Chrome Bridge 配置文件：' + ManifestPath);
 
-  SetRegView(64);
-  if not RegWriteStringValue(
-    HKCU,
-    'Software\Google\Chrome\NativeMessagingHosts\com.wq5881898.translator.stage2',
-    '',
-    ManifestPath) then
-    RaiseException('无法注册 64 位 Chrome Bridge。');
-  SetRegView(32);
-  if not RegWriteStringValue(
-    HKCU,
-    'Software\Google\Chrome\NativeMessagingHosts\com.wq5881898.translator.stage2',
-    '',
-    ManifestPath) then
-    RaiseException('无法注册 32 位 Chrome Bridge。');
-  SetRegView(64);
+  if not Exec(
+    ExpandConstant('{app}\desktop\Translator.Desktop.exe'),
+    '--register-bridge',
+    ExpandConstant('{app}\desktop'),
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    RegistrationResult) or (RegistrationResult <> 0) then
+    RaiseException(
+      'Chrome Bridge 自动注册失败，错误代码：' +
+      IntToStr(RegistrationResult) + '。');
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
