@@ -33,8 +33,9 @@
                     Click="CopyButton_Click" Content="Copy Chinese"/>
             <Button x:Name="SettingsButton" Margin="10,0,0,0"
                     Click="SettingsButton_Click" Content="Shortcut settings"/>
-            <Button x:Name="FavoriteButton" Margin="10,0,0,0" Width="48"
-                    FontSize="24" Click="FavoriteButton_Click"
+            <Button x:Name="FavoriteButton" Margin="10,0,0,0" Width="56"
+                    Padding="0" FontSize="26" FontFamily="Segoe UI Symbol"
+                    HorizontalContentAlignment="Center" Click="FavoriteButton_Click"
                     ToolTip="Save or remove current translation" Content="♡"
                     IsEnabled="False"/>
             <Button x:Name="FavoritesButton" Margin="10,0,0,0"

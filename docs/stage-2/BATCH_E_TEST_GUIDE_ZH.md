@@ -1,5 +1,12 @@
 # 第二阶段 Batch E：共享收藏测试说明
 
+## 配套浏览器插件
+
+Batch E 必须使用同一测试包 `extension` 文件夹中的 Translator `1.1.0`。
+加载新版插件后，还必须重新运行该包 `bridge/install-bridge.ps1`，使 Windows
+注册表指向 Batch E 的 Bridge Host。Chrome 扩展页仍显示 `1.0.0`，或未重新运行
+桥接脚本时，共享收藏不会生效。
+
 ## 目标
 
 - 桌面截图应用和浏览器插件使用同一个本地收藏库。

@@ -33,7 +33,7 @@ if (JSON.stringify(actualHosts) !== JSON.stringify([...expectedHosts].sort())) {
   throw new Error(`Unexpected host permissions: ${actualHosts.join(', ')}`);
 }
 
-if (manifest.version !== '1.0.0') {
+if (manifest.version !== '1.1.0') {
   throw new Error(`Unexpected release version: ${manifest.version}`);
 }
 

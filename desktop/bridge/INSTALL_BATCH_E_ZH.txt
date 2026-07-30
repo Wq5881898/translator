@@ -1,0 +1,15 @@
+Translator Stage 2 Batch E 安装/更新
+
+本批浏览器插件版本：1.1.0
+
+1. 打开 chrome://extensions
+2. 删除或停用旧的 Translator 测试插件。
+3. 开启“开发者模式”，点击“加载已解压的扩展程序”。
+4. 选择测试包根目录下的 extension 文件夹。
+5. 在测试包的 bridge 文件夹中右键 install-bridge.ps1，
+   选择“使用 PowerShell 运行”。
+6. 完全退出并重新打开 Chrome。
+7. Chrome 扩展详情页应显示版本 1.1.0。
+
+共享收藏需要第 4 步和第 5 步同时完成。仅更新桌面 EXE 或仅更新浏览器插件
+都不能建立共享收藏连接。
