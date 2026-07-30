@@ -59,7 +59,8 @@ begin
   ManifestDirectory := ExpandConstant('{localappdata}\Translator\bridge');
   ManifestPath := ManifestDirectory + '\com.wq5881898.translator.stage2.json';
   HostPath := ExpandConstant('{app}\bridge-host\Translator.BridgeHost.exe');
-  EscapedHostPath := StringChangeEx(HostPath, '\', '\\', True);
+  EscapedHostPath := HostPath;
+  StringChangeEx(EscapedHostPath, '\', '\\', True);
   ForceDirectories(ManifestDirectory);
   Manifest :=
     '{' + #13#10 +
