@@ -212,7 +212,10 @@ static async Task ValidateNativeHostRelayAsync()
 static Task ValidateGlobalShortcutContractAsync()
 {
     using var shortcut = new GlobalHotKeyService();
-    Assert(shortcut.DisplayName == "Ctrl+Shift+X", "Unexpected global shortcut.");
+    Assert(ShortcutSettings.Default.DisplayName == "Ctrl+Shift+X", "Unexpected default global shortcut.");
+    Assert(
+        new ShortcutSettings(ShortcutModifiers.ControlAlt, "Q").DisplayName == "Ctrl+Alt+Q",
+        "Configurable shortcut display is invalid.");
     return Task.CompletedTask;
 }
 static async Task ValidateWindowsOcrAsync()

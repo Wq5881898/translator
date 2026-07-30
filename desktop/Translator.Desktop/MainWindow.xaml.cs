@@ -8,6 +8,7 @@ public partial class MainWindow : Window
     private readonly BrowserBridgeTranslationProvider _translation = new();
     private readonly EnglishOcrProvider _ocr = new();
     private readonly GlobalHotKeyService _hotKey = new();
+    private ShortcutSettings _shortcutSettings = ShortcutSettingsStore.Load();
     private bool _busy;
 
     public MainWindow()
@@ -20,7 +21,14 @@ public partial class MainWindow : Window
 
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
-        if (_hotKey.TryRegister(this, out var error))
+        RegisterShortcut();
+    }
+
+    private void RegisterShortcut()
+    {
+        ShortcutHint.Text =
+            $"Press {_shortcutSettings.DisplayName} anywhere to capture, recognize and translate.";
+        if (_hotKey.TryRegister(this, _shortcutSettings, out var error))
         {
             HotKeyText.Text = $"{_hotKey.DisplayName} ready";
             StatusText.Text =
@@ -31,6 +39,37 @@ public partial class MainWindow : Window
             HotKeyText.Text = "Shortcut unavailable";
             StatusText.Text = error;
         }
+    }
+
+    private void SettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        var dialog = new ShortcutSettingsWindow(_shortcutSettings) { Owner = this };
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        var previous = _shortcutSettings;
+        _shortcutSettings = dialog.SelectedSettings;
+        if (_hotKey.TryRegister(this, _shortcutSettings, out var error))
+        {
+            ShortcutSettingsStore.Save(_shortcutSettings);
+            ShortcutHint.Text =
+                $"Press {_shortcutSettings.DisplayName} anywhere to capture, recognize and translate.";
+            HotKeyText.Text = $"{_shortcutSettings.DisplayName} ready";
+            StatusText.Text = "Screenshot shortcut saved and ready.";
+            return;
+        }
+
+        _shortcutSettings = previous;
+        RegisterShortcut();
+        StatusText.Text =
+            $"{error} The previous shortcut {_shortcutSettings.DisplayName} remains active.";
     }
 
     private void OnClosed(object? sender, EventArgs e)
@@ -188,6 +227,7 @@ public partial class MainWindow : Window
         CaptureButton.IsEnabled = !busy;
         TranslateButton.IsEnabled = !busy;
         CopyButton.IsEnabled = !busy;
+        SettingsButton.IsEnabled = !busy;
         if (status is not null)
         {
             StatusText.Text = status;
