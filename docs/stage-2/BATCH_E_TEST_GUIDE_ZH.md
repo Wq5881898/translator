@@ -72,3 +72,18 @@ Bridge Host，不再要求手动运行 PowerShell。Chrome 扩展页仍显示 `1
 
 28. 保持 Chrome 和插件开启，让 `Translator.BridgeHost.exe` 正在运行；直接再次运行新版安装器覆盖安装，确认不再出现
     `DeleteFile failed; code 5`，安装完成后插件无需重新选择目录且 `Sync now` 可以恢复共享。
+
+## 最终候选实机验证（2026-07-30）
+
+候选提交：`d7613035bb6435ac456025482aa74e0653db1015`
+
+- GitHub CI：通过（39 个扩展测试及发布校验）。
+- Stage 2 Batch E：通过（Windows 编译、技术检查、发布、运行旧进程时覆盖安装、注册表与安装包校验）。
+- Windows 实机静默覆盖安装：退出码 0。
+- Chrome Native Messaging 注册：当前用户 Registry64 与 Registry32 均指向有效 manifest。
+- 真实翻译：`Permission was granted.` 经 Desktop → Bridge Host → Chrome 本地翻译 → Desktop 返回“获得了许可。”，退出码 0。
+- 收藏通道并发：保持翻译 Bridge Host 运行时，第二个 Native Messaging Host 成功执行 `favorites.read` 并读取 4 条共享收藏，退出码 0。
+- 安装包 SHA-256：`0E61E49BA13E9A7E202553E257DDCB0A6E618A1510B28AF801DF9BB0B40C7BAB`。
+
+本轮根因不是收藏合并算法，而是命名管道只允许一个服务端实例。修复后翻译持久连接与收藏短连接可以同时工作。
+
