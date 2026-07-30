@@ -8,7 +8,10 @@ import {
   type TranslationRequest,
   type TranslationResult,
 } from './translation-provider';
-import { fetchEnglishPhonetic } from './free-dictionary-provider';
+import {
+  fetchEnglishDictionaryLookup,
+  type FetchLike,
+} from './free-dictionary-provider';
 
 type Availability = 'available' | 'downloadable' | 'downloading' | 'unavailable';
 
@@ -34,6 +37,7 @@ function defaultApi(): BuiltInTranslatorApi | undefined {
 
 export function createChromeTranslationProvider(
   suppliedApi?: BuiltInTranslatorApi,
+  dictionaryFetcher: FetchLike = fetch,
 ): TranslationProvider {
   let sessionPromise: Promise<BuiltInTranslatorSession> | undefined;
 
@@ -79,17 +83,28 @@ export function createChromeTranslationProvider(
       const text = validateEnglishTranslationInput(request.text);
       const textKind = classifyText(text);
       const session = await withTimeout(getSession());
-      const [translatedText, phoneticResult] = await Promise.all([
-        withTimeout(session.translate(text)),
+      const dictionaryResult =
         textKind === 'word'
-          ? withTimeout(
-              fetchEnglishPhonetic(text).catch(() => undefined),
+          ? await withTimeout(
+              fetchEnglishDictionaryLookup(text, dictionaryFetcher).catch(() => undefined),
               8_000,
               'Dictionary lookup timed out.',
             )
-          : Promise.resolve(undefined),
-      ]);
-      const normalizedTranslation = translatedText.trim();
+          : undefined;
+      const translationInputs = dictionaryResult
+        ? [dictionaryResult.headword, ...dictionaryResult.definitions]
+        : [text];
+      const translatedSenses = await Promise.all(
+        translationInputs.map((input) => withTimeout(session.translate(input))),
+      );
+      const alternatives = translatedSenses
+        .map((value) => value.trim())
+        .filter(
+          (value, index, values) =>
+            value.length > 0 && values.indexOf(value) === index,
+        )
+        .slice(0, 3);
+      const normalizedTranslation = alternatives.join('；');
 
       if (!normalizedTranslation) {
         throw new Error('Chrome returned an empty translation. Try again.');
@@ -100,10 +115,12 @@ export function createChromeTranslationProvider(
         translatedText: normalizedTranslation,
         textKind,
         provider: 'chrome-local',
-        ...(phoneticResult ? { phonetic: phoneticResult } : {}),
+        ...(dictionaryResult?.phonetic ? { phonetic: dictionaryResult.phonetic } : {}),
+        ...(alternatives.length > 1 ? { alternatives } : {}),
       };
     },
   };
 }
 
 export const chromeTranslationProvider = createChromeTranslationProvider();
+
