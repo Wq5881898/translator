@@ -221,7 +221,7 @@ public partial class MainWindow : Window
             var result = await _translation.TranslateAsync(
                 new TranslationRequest(Guid.NewGuid().ToString("N"), RecognizedText.Text),
                 CancellationToken.None);
-            TranslatedText.Text = result.TranslatedText;
+            TranslatedText.Text = TranslationDisplay.Format(result);
             _currentTranslation = result;
             await RefreshFavoriteButtonAsync();
             StatusText.Text = "Translation complete.";
