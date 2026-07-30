@@ -11,6 +11,7 @@ public partial class MainWindow : Window
     private ShortcutSettings _shortcutSettings = ShortcutSettingsStore.Load();
     private TranslationResult? _currentTranslation;
     private bool _busy;
+    private DateTimeOffset _lastBridgeRegistrationAttempt = DateTimeOffset.MinValue;
 
     public MainWindow()
     {
@@ -24,6 +25,25 @@ public partial class MainWindow : Window
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
+        EnsureBridgeRegistration(force: true);
+        await RefreshFavoriteCountAsync();
+    }
+
+    private async void OnActivated(object? sender, EventArgs e)
+    {
+        EnsureBridgeRegistration();
+        await RefreshFavoriteCountAsync();
+    }
+
+    private void EnsureBridgeRegistration(bool force = false)
+    {
+        if (!force &&
+            DateTimeOffset.UtcNow - _lastBridgeRegistrationAttempt < TimeSpan.FromSeconds(30) &&
+            BridgeRegistrationService.IsRegistered())
+        {
+            return;
+        }
+        _lastBridgeRegistrationAttempt = DateTimeOffset.UtcNow;
         try
         {
             BridgeRegistrationService.EnsureRegistered();
@@ -31,14 +51,9 @@ public partial class MainWindow : Window
         catch (Exception exception)
         {
             StatusText.Text =
-                $"Chrome bridge setup failed: {FriendlyError(exception)} Re-extract the complete package.";
+                $"Chrome bridge registration failed: {FriendlyError(exception)} " +
+                "Favorites remain safe locally. Reinstall Translator or retry after checking Windows security.";
         }
-        await RefreshFavoriteCountAsync();
-    }
-
-    private async void OnActivated(object? sender, EventArgs e)
-    {
-        await RefreshFavoriteCountAsync();
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)
@@ -179,6 +194,7 @@ public partial class MainWindow : Window
 
     private async Task TranslateCurrentTextAsync()
     {
+        EnsureBridgeRegistration();
         _currentTranslation = null;
         FavoriteButton.Content = "♡";
         TranslatedText.Clear();
@@ -350,3 +366,4 @@ public partial class MainWindow : Window
     private static string FriendlyError(Exception exception) =>
         exception.Message.Replace("\r", " ").Replace("\n", " ").Trim();
 }
+
