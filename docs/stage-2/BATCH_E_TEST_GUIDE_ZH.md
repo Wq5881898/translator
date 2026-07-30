@@ -69,3 +69,6 @@ Bridge Host，不再要求手动运行 PowerShell。Chrome 扩展页仍显示 `1
 25. 恢复 Bridge 后点击 `Sync now`，确认离线收藏合并进共享库且状态变为 `Shared with the Windows app`。
 26. 翻译带音标的单词，确认浏览器音标与中文翻译字号、字重和颜色一致。
 27. 在 Windows 程序中翻译单词，确认中文结果框第一行显示音标、下一行显示中文释义；翻译句子时不显示单词音标。
+
+28. 保持 Chrome 和插件开启，让 `Translator.BridgeHost.exe` 正在运行；直接再次运行新版安装器覆盖安装，确认不再出现
+    `DeleteFile failed; code 5`，安装完成后插件无需重新选择目录且 `Sync now` 可以恢复共享。
