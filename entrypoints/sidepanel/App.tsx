@@ -9,6 +9,11 @@ import {
   removeFavorite,
   type FavoriteEntry,
 } from '../../src/core/favorites';
+import { mergeFavorites } from '../../src/core/favorites-transfer';
+import {
+  readSharedFavorites,
+  writeSharedFavorites,
+} from '../../src/core/shared-favorites';
 import {
   isExtensionMessage,
   type ExtensionResponse,
@@ -124,14 +129,24 @@ export function App() {
 
     void browser.storage.local
       .get(FAVORITES_STORAGE_KEY)
-      .then((stored) => {
+      .then(async (stored) => {
         if (!active) {
           return;
         }
 
         const saved = stored[FAVORITES_STORAGE_KEY];
-        if (Array.isArray(saved)) {
-          setFavorites(saved as FavoriteEntry[]);
+        const browserFavorites = Array.isArray(saved) ? saved as FavoriteEntry[] : [];
+        try {
+          const sharedFavorites = await readSharedFavorites();
+          const merged = mergeFavorites(sharedFavorites, browserFavorites);
+          await writeSharedFavorites(merged);
+          await browser.storage.local.set({ [FAVORITES_STORAGE_KEY]: merged });
+          if (active) setFavorites(merged);
+        } catch {
+          if (active) {
+            setFavorites(browserFavorites);
+            setStatus('Shared favorites are unavailable; browser favorites remain usable.');
+          }
         }
       })
       .catch(() => {
@@ -199,17 +214,28 @@ export function App() {
 
   async function persistFavorites(nextFavorites: FavoriteEntry[]) {
     try {
+      const sharedFavorites = await writeSharedFavorites(nextFavorites);
       await browser.storage.local.set({
-        [FAVORITES_STORAGE_KEY]: nextFavorites,
+        [FAVORITES_STORAGE_KEY]: sharedFavorites,
       });
-      setFavorites(nextFavorites);
+      setFavorites(sharedFavorites);
     } catch {
-      const message =
-        'Favorites could not be saved. Check browser storage and try again.';
-      setStatus(message);
-      setFoundationResult(message);
-      setOutputIsError(true);
-      throw new Error(message);
+      try {
+        await browser.storage.local.set({
+          [FAVORITES_STORAGE_KEY]: nextFavorites,
+        });
+        setFavorites(nextFavorites);
+        setStatus(
+          'Saved in the browser. Shared-library sync will retry when the local bridge is available.',
+        );
+      } catch {
+        const message =
+          'Favorites could not be saved. Check browser storage and the local bridge, then try again.';
+        setStatus(message);
+        setFoundationResult(message);
+        setOutputIsError(true);
+        throw new Error(message);
+      }
     }
   }
 

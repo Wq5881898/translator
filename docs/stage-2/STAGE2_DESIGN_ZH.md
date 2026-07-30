@@ -201,3 +201,18 @@ PowerShell Registry Provider 中，名为 `(default)` 的属性并不等于注�
 所有格形式。该规则只在 OCR 清理流程内使用，不修改用户在英文编辑框内手动输入
 的文本。回归样本必须至少覆盖 `week’s`、`Russia’s`、`America’s`、`it's` 和
 `don't`。
+
+## 8. Batch E 共享收藏库
+
+桌面端和浏览器插件以 `%LOCALAPPDATA%\Translator\favorites.json` 作为共同数据源。
+Native Host 只处理 `favorites.read` 和 `favorites.write` 两类本地协议消息，不接收
+截图，也不上传收藏。写入时先生成临时文件，再原子替换正式文件。
+
+收藏结构与第一阶段保持兼容：`id`、`kind`、`originalText`、
+`translatedText`、`firstFavoritedAt` 和可选 `phonetic`。插件启动时把原有
+`chrome.storage.local` 收藏与共享文件按稳定 ID 合并，从而自动迁移旧数据。
+Native Host 暂不可用时，插件仍保存到浏览器本地，并在下次启动时重试同步。
+
+桌面主界面只显示爱心按钮和 `Favorites` 入口。收藏列表在独立窗口中按需打开，
+支持删除、CSV 导入和 CSV 导出。CSV 列名继续与第一阶段一致：
+`Type, English, Phonetic, Chinese translation, First saved`。

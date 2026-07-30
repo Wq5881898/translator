@@ -73,6 +73,7 @@ if (args is ["--bridge-translate", var text])
 var checks = new (string Name, Func<Task> Run)[]
 {
     ("text rules", ValidateTextRulesAsync),
+    ("shared favorites contract", ValidateSharedFavoritesAsync),
     ("mock provider", ValidateMockAsync),
     ("native frame UTF-8 round-trip", ValidateFramingAsync),
     ("invalid native frame rejection", ValidateInvalidLengthAsync),
@@ -126,6 +127,22 @@ static Task ValidateTextRulesAsync()
         TextRules.CleanEnglishOcrArtifacts("this week s cartoon Russia s attack America s plan") ==
         "this week's cartoon Russia's attack America's plan",
         "Detached possessive markers were not repaired.");
+    return Task.CompletedTask;
+}
+
+static Task ValidateSharedFavoritesAsync()
+{
+    var favorite = new FavoriteEntry(
+        "word:hello",
+        "word",
+        "Hello",
+        "你好",
+        "2026-07-30T00:00:00.000Z",
+        "/həˈləʊ/");
+    Assert(SharedFavoriteStore.IsValid(favorite), "A valid favorite was rejected.");
+    var csv = FavoritesCsv.Serialize([favorite]);
+    var parsed = FavoritesCsv.Parse(csv);
+    Assert(parsed.Count == 1 && parsed[0] == favorite, "Favorites CSV did not round-trip.");
     return Task.CompletedTask;
 }
 static async Task ValidateMockAsync()

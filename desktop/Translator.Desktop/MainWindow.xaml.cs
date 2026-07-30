@@ -9,6 +9,7 @@ public partial class MainWindow : Window
     private readonly EnglishOcrProvider _ocr = new();
     private readonly GlobalHotKeyService _hotKey = new();
     private ShortcutSettings _shortcutSettings = ShortcutSettingsStore.Load();
+    private TranslationResult? _currentTranslation;
     private bool _busy;
 
     public MainWindow()
@@ -95,6 +96,7 @@ public partial class MainWindow : Window
 
     private async Task CaptureRecognizeAndTranslateAsync()
     {
+        _currentTranslation = null;
         RecognizedText.Clear();
         TranslatedText.Clear();
         SetBusy(true, "Select a region. Press Esc to cancel.");
@@ -156,6 +158,8 @@ public partial class MainWindow : Window
 
     private async Task TranslateCurrentTextAsync()
     {
+        _currentTranslation = null;
+        FavoriteButton.Content = "♡";
         TranslatedText.Clear();
         if (string.IsNullOrWhiteSpace(RecognizedText.Text))
         {
@@ -181,12 +185,74 @@ public partial class MainWindow : Window
                 new TranslationRequest(Guid.NewGuid().ToString("N"), RecognizedText.Text),
                 CancellationToken.None);
             TranslatedText.Text = result.TranslatedText;
+            _currentTranslation = result;
+            await RefreshFavoriteButtonAsync();
             StatusText.Text = "Translation complete.";
         }
         catch (Exception exception)
         {
             StatusText.Text = $"Translation failed: {FriendlyError(exception)}";
         }
+    }
+
+    private async void FavoriteButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentTranslation is null) return;
+        try
+        {
+            var favorites = (await SharedFavoriteStore.LoadAsync()).ToList();
+            var kind = _currentTranslation.TextKind == TextKind.Word ? "word" : "sentence";
+            var normalized = TextRules.Normalize(_currentTranslation.OriginalText);
+            var id = $"{kind}:{(kind == "word" ? normalized.ToLowerInvariant() : normalized)}";
+            var existing = favorites.FindIndex(item => item.Id == id);
+            if (existing >= 0)
+            {
+                favorites.RemoveAt(existing);
+                StatusText.Text = "Removed from favorites.";
+            }
+            else
+            {
+                favorites.Insert(0, new FavoriteEntry(
+                    id,
+                    kind,
+                    normalized,
+                    _currentTranslation.TranslatedText,
+                    DateTimeOffset.UtcNow.ToString("O"),
+                    _currentTranslation.Phonetic));
+                StatusText.Text = "Saved to the shared local favorites.";
+            }
+            await SharedFavoriteStore.SaveAsync(favorites);
+            await RefreshFavoriteButtonAsync();
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text = $"Favorite update failed: {FriendlyError(exception)}";
+        }
+    }
+
+    private async void FavoritesButton_Click(object sender, RoutedEventArgs e)
+    {
+        var window = new FavoritesWindow { Owner = this };
+        window.ShowDialog();
+        await RefreshFavoriteButtonAsync();
+    }
+
+    private async Task RefreshFavoriteButtonAsync()
+    {
+        if (_currentTranslation is null)
+        {
+            FavoriteButton.Content = "♡";
+            return;
+        }
+        var kind = _currentTranslation.TextKind == TextKind.Word ? "word" : "sentence";
+        var normalized = TextRules.Normalize(_currentTranslation.OriginalText);
+        var id = $"{kind}:{(kind == "word" ? normalized.ToLowerInvariant() : normalized)}";
+        var favorites = await SharedFavoriteStore.LoadAsync();
+        var saved = favorites.Any(item => item.Id == id);
+        FavoriteButton.Content = saved ? "♥" : "♡";
+        FavoriteButton.Foreground = saved
+            ? System.Windows.Media.Brushes.Crimson
+            : System.Windows.Media.Brushes.Black;
     }
 
     private void CopyButton_Click(object sender, RoutedEventArgs e)
@@ -228,6 +294,8 @@ public partial class MainWindow : Window
         TranslateButton.IsEnabled = !busy;
         CopyButton.IsEnabled = !busy;
         SettingsButton.IsEnabled = !busy;
+        FavoriteButton.IsEnabled = !busy && _currentTranslation is not null;
+        FavoritesButton.IsEnabled = !busy;
         if (status is not null)
         {
             StatusText.Text = status;
