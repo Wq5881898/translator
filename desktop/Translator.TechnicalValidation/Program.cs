@@ -141,8 +141,13 @@ static Task ValidateSharedFavoritesAsync()
         "/həˈləʊ/");
     Assert(SharedFavoriteStore.IsValid(favorite), "A valid favorite was rejected.");
     var csv = FavoritesCsv.Serialize([favorite]);
+    Assert(csv.Contains("2026-07-30") && !csv.Contains("2026-07-30T"),
+        "Favorites CSV must export First saved as YYYY-MM-DD.");
     var parsed = FavoritesCsv.Parse(csv);
-    Assert(parsed.Count == 1 && parsed[0] == favorite, "Favorites CSV did not round-trip.");
+    Assert(
+        parsed.Count == 1 &&
+        parsed[0] == favorite with { FirstFavoritedAt = "2026-07-30" },
+        "Favorites CSV did not round-trip.");
     return Task.CompletedTask;
 }
 static async Task ValidateMockAsync()
@@ -348,3 +353,4 @@ static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
 delegate bool EnumWindowsCallback(IntPtr window, IntPtr parameter);
 [StructLayout(LayoutKind.Sequential)]
 struct NativeRectangle { public int Left; public int Top; public int Right; public int Bottom; }
+
