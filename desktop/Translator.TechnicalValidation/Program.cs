@@ -108,20 +108,20 @@ static Task ValidateTextRulesAsync()
         "An icon-only pseudo-word was accepted.");
     Assert(TextRules.AssessEnglishOcr("Translator.Desktop.exe", 0.80f).IsReliable,
         "A valid file name was rejected.");
-    Assert(TextRules.ExtractEnglishOcrContent("技术检查 7/7，GitHub CI 通过。") == "7/7 GitHub CI",
+    Assert(TextRules.ExtractEnglishOcrContent("鎶€鏈鏌?7/7锛孏itHub CI 閫氳繃銆?) == "7/7 GitHub CI",
         "English was not extracted from mixed Chinese text.");
-    Assert(TextRules.AssessEnglishOcr("技术检查 7/7，GitHub CI 通过。", 0.80f).IsReliable,
+    Assert(TextRules.AssessEnglishOcr("鎶€鏈鏌?7/7锛孏itHub CI 閫氳繃銆?, 0.80f).IsReliable,
         "English in mixed Chinese text was rejected.");
-    Assert(!TextRules.AssessEnglishOcr("已处理 4m 58s >", 0.90f).IsReliable,
+    Assert(!TextRules.AssessEnglishOcr("宸插鐞?4m 58s >", 0.90f).IsReliable,
         "A Chinese status containing only time units was accepted as English.");
     Assert(TextRules.MergeEnglishFromBilingualOcr(
             "GitHub CI iat,",
-            "GitHub Cl 通过。") == "GitHub CI",
+            "GitHub Cl 閫氳繃銆?) == "GitHub CI",
         "English-only and bilingual OCR results were not reconciled.");
     Assert(TextRules.CleanEnglishOcrArtifacts("GitHub Cl") == "GitHub CI",
         "A likely technical acronym I/l confusion was not corrected.");
     Assert(
-        TextRules.ExtractEnglishOcrContent("this week’s cartoon, Russia’s attack, America’s plan") ==
+        TextRules.ExtractEnglishOcrContent("this week鈥檚 cartoon, Russia鈥檚 attack, America鈥檚 plan") ==
         "this week's cartoon, Russia's attack, America's plan",
         "Curly OCR apostrophes were not normalized.");
     Assert(
@@ -137,9 +137,9 @@ static Task ValidateSharedFavoritesAsync()
         "word:hello",
         "word",
         "Hello",
-        "你好",
+        "浣犲ソ",
         "2026-07-30T00:00:00.000Z",
-        "/həˈləʊ/");
+        "/h蓹藞l蓹蕣/");
     Assert(SharedFavoriteStore.IsValid(favorite), "A valid favorite was rejected.");
     var csv = FavoritesCsv.Serialize([favorite]);
     Assert(csv.Contains("2026-07-30") && !csv.Contains("2026-07-30T"),
@@ -151,18 +151,19 @@ static Task ValidateSharedFavoritesAsync()
         "Favorites CSV did not round-trip.");
     return Task.CompletedTask;
 }
+
 static Task ValidateTranslationDisplayAsync()
 {
     var word = new TranslationResult(
         "word-result",
         "granted",
-        "授予；批准",
+        "鎺堜簣锛涙壒鍑?,
         TextKind.Word,
         "chrome-local-bridge",
-        "/ˈɡrɑːntɪd/");
+        "/藞伞r蓱藧nt瑟d/");
     Assert(
         TranslationDisplay.Format(word) ==
-        $"/ˈɡrɑːntɪd/{Environment.NewLine}授予；批准",
+        $"/藞伞r蓱藧nt瑟d/{Environment.NewLine}鎺堜簣锛涙壒鍑?,
         "A word result must display its phonetic before the Chinese translation.");
 
     var sentence = word with
@@ -171,7 +172,7 @@ static Task ValidateTranslationDisplayAsync()
         TextKind = TextKind.Sentence,
     };
     Assert(
-        TranslationDisplay.Format(sentence) == "授予；批准",
+        TranslationDisplay.Format(sentence) == "鎺堜簣锛涙壒鍑?,
         "Sentence results must not prepend a word phonetic.");
     return Task.CompletedTask;
 }
@@ -186,12 +187,12 @@ static async Task ValidateMockAsync()
 static async Task ValidateFramingAsync()
 {
     var expected = new BridgeEnvelope(BridgeEnvelope.CurrentVersion, "bridge.health", "r2", DateTimeOffset.UtcNow,
-        JsonSerializer.SerializeToElement(new { text = "Hello 世界" }));
+        JsonSerializer.SerializeToElement(new { text = "Hello 涓栫晫" }));
     await using var stream = new MemoryStream();
     await NativeMessageFraming.WriteAsync(stream, expected, CancellationToken.None);
     stream.Position = 0;
     var actual = await NativeMessageFraming.ReadAsync(stream, CancellationToken.None);
-    Assert(actual?.Payload.GetProperty("text").GetString() == "Hello 世界", "UTF-8 payload failed.");
+    Assert(actual?.Payload.GetProperty("text").GetString() == "Hello 涓栫晫", "UTF-8 payload failed.");
 }
 static async Task ValidateInvalidLengthAsync()
 {
@@ -226,6 +227,32 @@ static async Task ValidateNativeHostRelayAsync()
     }) ?? throw new InvalidOperationException("Bridge Host could not be started.");
     try
     {
+        using var favoritesProcess = Process.Start(new ProcessStartInfo(hostPath)
+        {
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        }) ?? throw new InvalidOperationException("Concurrent favorites Bridge Host could not be started.");
+        var favoritesRequest = BridgeEnvelope.Create(
+            "favorites.read",
+            "concurrent-favorites-read",
+            new { });
+        await NativeMessageFraming.WriteAsync(
+            favoritesProcess.StandardInput.BaseStream,
+            favoritesRequest,
+            CancellationToken.None);
+        var favoritesResponse = await NativeMessageFraming.ReadAsync(
+            favoritesProcess.StandardOutput.BaseStream,
+            CancellationToken.None)
+            ?? throw new InvalidOperationException("Concurrent favorites Bridge Host returned no response.");
+        Assert(
+            favoritesResponse.MessageType == "favorites.result",
+            "Concurrent favorites request failed while the translation host was active.");
+        favoritesProcess.StandardInput.Close();
+        await favoritesProcess.WaitForExitAsync();
+
         var provider = new BrowserBridgeTranslationProvider();
         var translationTask = provider.TranslateAsync(
             new TranslationRequest("relay-test", "Hello world."),
@@ -244,7 +271,7 @@ static async Task ValidateNativeHostRelayAsync()
             new
             {
                 originalText = "Hello world.",
-                translatedText = "你好，世界。",
+                translatedText = "浣犲ソ锛屼笘鐣屻€?,
                 textKind = "sentence",
                 provider = "chrome-local",
             });
@@ -253,7 +280,7 @@ static async Task ValidateNativeHostRelayAsync()
             response,
             CancellationToken.None);
         var result = await translationTask;
-        Assert(result.TranslatedText == "你好，世界。", "Desktop did not receive translated text.");
+        Assert(result.TranslatedText == "浣犲ソ锛屼笘鐣屻€?, "Desktop did not receive translated text.");
         Assert(result.Provider == "chrome-local", "Desktop did not preserve provider metadata.");
     }
     finally
@@ -303,7 +330,7 @@ static async Task ValidatePackagedEnglishOcrAsync()
 }
 static async Task ValidateNonEnglishOcrAsync()
 {
-    await using var stream = CreateTestImage("这是一个中文截图测试", "Microsoft YaHei UI");
+    await using var stream = CreateTestImage("杩欐槸涓€涓腑鏂囨埅鍥炬祴璇?, "Microsoft YaHei UI");
     var provider = new PackagedEnglishOcrProvider();
     var result = await provider.RecognizeAsync(stream, CancellationToken.None);
     var assessment = TextRules.AssessEnglishOcr(result.Text, result.Confidence);
