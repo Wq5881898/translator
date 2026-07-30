@@ -204,6 +204,12 @@ time {
   font-size: 12px;
 }
 
+.section-heading span.error {
+  max-width: 260px;
+  color: #a03b2c;
+  line-height: 1.4;
+}
+
 .favorite-group {
   display: grid;
   gap: 8px;
@@ -367,3 +373,4 @@ time {
   padding: 8px 10px;
   font-size: 12px;
 }
+
