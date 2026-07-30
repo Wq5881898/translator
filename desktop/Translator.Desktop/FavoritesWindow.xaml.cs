@@ -35,7 +35,7 @@ public partial class FavoritesWindow : Window
 
     private async void Import_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog { Filter = "CSV files (*.csv)|*.csv" };
+        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "CSV files (*.csv)|*.csv" };
         if (dialog.ShowDialog(this) != true) return;
         try
         {
@@ -57,7 +57,7 @@ public partial class FavoritesWindow : Window
 
     private async void Export_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new SaveFileDialog
+        var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "CSV files (*.csv)|*.csv",
             FileName = $"translator-favorites-{DateTime.Now:yyyy-MM-dd}.csv"
