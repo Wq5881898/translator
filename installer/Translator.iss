@@ -125,4 +125,3 @@ begin
   if CurStep = ssPostInstall then
     WriteNativeMessagingManifest;
 end;
-

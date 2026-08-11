@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Diagnostics;
+using System.Text;
 using Translator.Core;
 
 namespace Translator.Desktop;
@@ -11,6 +13,7 @@ public partial class MainWindow : Window
     private ShortcutSettings _shortcutSettings = ShortcutSettingsStore.Load();
     private TranslationResult? _currentTranslation;
     private bool _busy;
+    private Process? _speechProcess;
     private DateTimeOffset _lastBridgeRegistrationAttempt = DateTimeOffset.MinValue;
 
     public MainWindow()
@@ -113,6 +116,11 @@ public partial class MainWindow : Window
     {
         _hotKey.Pressed -= OnHotKeyPressed;
         _hotKey.Dispose();
+        if (_speechProcess is { HasExited: false })
+        {
+            try { _speechProcess.Kill(entireProcessTree: true); } catch { }
+        }
+        _speechProcess?.Dispose();
     }
 
     private async void OnHotKeyPressed(object? sender, EventArgs e)
@@ -197,6 +205,8 @@ public partial class MainWindow : Window
         EnsureBridgeRegistration();
         _currentTranslation = null;
         FavoriteButton.Content = "♡";
+        PhoneticText.Text = string.Empty;
+        SpeakButton.IsEnabled = false;
         TranslatedText.Clear();
         if (string.IsNullOrWhiteSpace(RecognizedText.Text))
         {
@@ -221,8 +231,12 @@ public partial class MainWindow : Window
             var result = await _translation.TranslateAsync(
                 new TranslationRequest(Guid.NewGuid().ToString("N"), RecognizedText.Text),
                 CancellationToken.None);
-            TranslatedText.Text = TranslationDisplay.Format(result);
+            PhoneticText.Text = result.TextKind == TextKind.Word && !string.IsNullOrWhiteSpace(result.Phonetic)
+                ? result.Phonetic
+                : string.Empty;
+            TranslatedText.Text = result.TranslatedText;
             _currentTranslation = result;
+            SpeakButton.IsEnabled = true;
             await RefreshFavoriteButtonAsync();
             StatusText.Text = "Translation complete.";
         }
@@ -317,6 +331,60 @@ public partial class MainWindow : Window
         CopyText(TranslatedText.Text, "Chinese translation");
     }
 
+    private void SpeakButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentTranslation is null || string.IsNullOrWhiteSpace(_currentTranslation.OriginalText))
+        {
+            StatusText.Text = "There is no English text to read aloud.";
+            return;
+        }
+        try
+        {
+            if (_speechProcess is { HasExited: false })
+            {
+                _speechProcess.Kill(entireProcessTree: true);
+                SpeakButton.Content = "Read aloud";
+                StatusText.Text = "Reading stopped.";
+                return;
+            }
+            var encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes(_currentTranslation.OriginalText));
+            var script = "$t=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encoded + "')); " +
+                         "Add-Type -AssemblyName System.Speech; $s=New-Object System.Speech.Synthesis.SpeechSynthesizer; " +
+                         "$s.SelectVoiceByHints([System.Speech.Synthesis.VoiceGender]::NotSet, [System.Speech.Synthesis.VoiceAge]::NotSet, 0, [Globalization.CultureInfo]::GetCultureInfo('en-US')); $s.Speak($t)";
+            _speechProcess = Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"{script}\"",
+                CreateNoWindow = true,
+                UseShellExecute = false,
+            });
+            SpeakButton.Content = "Stop reading";
+            StatusText.Text = "Reading English aloud locally...";
+            _ = WatchSpeechAsync(_speechProcess);
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text = $"Read aloud failed: {FriendlyError(exception)}";
+        }
+    }
+
+    private async Task WatchSpeechAsync(Process? process)
+    {
+        if (process is null) return;
+        try { await process.WaitForExitAsync(); } catch { return; }
+        if (!Dispatcher.HasShutdownStarted)
+        {
+            await Dispatcher.InvokeAsync(() =>
+            {
+                SpeakButton.Content = "Read aloud";
+                if (StatusText.Text.StartsWith("Reading English", StringComparison.Ordinal))
+                    StatusText.Text = "Reading complete.";
+            });
+        }
+        process.Dispose();
+        _speechProcess = null;
+    }
+
     private void CopyText(string value, string description)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -356,6 +424,7 @@ public partial class MainWindow : Window
         TranslateButton.IsEnabled = !busy;
         SettingsButton.IsEnabled = !busy;
         FavoriteButton.IsEnabled = !busy && _currentTranslation is not null;
+        SpeakButton.IsEnabled = !busy && _currentTranslation is not null;
         FavoritesButton.IsEnabled = !busy;
         if (status is not null)
         {
@@ -366,4 +435,3 @@ public partial class MainWindow : Window
     private static string FriendlyError(Exception exception) =>
         exception.Message.Replace("\r", " ").Replace("\n", " ").Trim();
 }
-

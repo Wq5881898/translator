@@ -112,4 +112,3 @@ jobs:
           name: translator-stage2-installer
           path: installer-output/Translator-Setup.exe
           if-no-files-found: error
-

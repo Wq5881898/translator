@@ -79,4 +79,3 @@ describe('favorites CSV transfer', () => {
     ]);
   });
 });
-

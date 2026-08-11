@@ -684,4 +684,3 @@ export function App() {
     </main>
   );
 }
-

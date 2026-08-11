@@ -75,4 +75,3 @@ export async function retryWithDelays<T>(
     ? lastError
     : new Error('The shared favorites service is unavailable.');
 }
-

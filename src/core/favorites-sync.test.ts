@@ -98,4 +98,3 @@ describe('favorites synchronization', () => {
     expect(parseFavoritesSyncMetadata('invalid')).toEqual(INITIAL_FAVORITES_SYNC_METADATA);
   });
 });
-

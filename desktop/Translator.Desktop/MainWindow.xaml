@@ -59,10 +59,15 @@
                      AcceptsReturn="True" TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto" Padding="12" FontSize="16"/>
             <DockPanel Grid.Row="2">
+                <Button x:Name="SpeakButton" DockPanel.Dock="Right" Width="92" Height="30" Padding="4,0"
+                        Click="SpeakButton_Click" Content="Read aloud" IsEnabled="False"/>
                 <Button DockPanel.Dock="Right" Width="64" Height="30" Padding="4,0"
                         Click="CopyChineseButton_Click" Content="Copy"/>
-                <TextBlock VerticalAlignment="Center" FontWeight="SemiBold"
-                           Text="Chinese"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock FontWeight="SemiBold" Text="Chinese"/>
+                    <TextBlock x:Name="PhoneticText" Margin="12,0,0,0" Foreground="#52635A"
+                               FontSize="16" VerticalAlignment="Center"/>
+                </StackPanel>
             </DockPanel>
             <TextBox x:Name="TranslatedText" Grid.Row="3" Margin="0,7,0,0"
                      IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"

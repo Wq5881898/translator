@@ -161,4 +161,3 @@ export function mergeFavorites(
 
   return [...merged.values()];
 }
-

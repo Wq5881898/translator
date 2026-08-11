@@ -20,4 +20,3 @@ Bridge 注册由安装程序和桌面程序自动完成，不需要运行 PowerS
    %LOCALAPPDATA%\Translator\favorites.json
 
 卸载程序默认保留收藏数据，避免误删学习记录。
-

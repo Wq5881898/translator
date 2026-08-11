@@ -123,4 +123,3 @@ export function createChromeTranslationProvider(
 }
 
 export const chromeTranslationProvider = createChromeTranslationProvider();
-

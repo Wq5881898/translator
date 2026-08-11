@@ -151,6 +151,7 @@ static Task ValidateSharedFavoritesAsync()
         "Favorites CSV did not round-trip.");
     return Task.CompletedTask;
 }
+
 static Task ValidateTranslationDisplayAsync()
 {
     var word = new TranslationResult(
@@ -405,4 +406,3 @@ static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
 delegate bool EnumWindowsCallback(IntPtr window, IntPtr parameter);
 [StructLayout(LayoutKind.Sequential)]
 struct NativeRectangle { public int Left; public int Top; public int Right; public int Bottom; }
-
