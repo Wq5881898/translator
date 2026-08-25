@@ -1,19 +1,23 @@
 import {
   validateEnglishTranslationInput,
   withTimeout,
-} from '../core/translation-guard';
+} from "../core/translation-guard";
 import {
   classifyText,
   type TranslationProvider,
   type TranslationRequest,
   type TranslationResult,
-} from './translation-provider';
+} from "./translation-provider";
 import {
   fetchEnglishDictionaryLookup,
   type FetchLike,
-} from './free-dictionary-provider';
+} from "./free-dictionary-provider";
 
-type Availability = 'available' | 'downloadable' | 'downloading' | 'unavailable';
+type Availability =
+  | "available"
+  | "downloadable"
+  | "downloading"
+  | "unavailable";
 
 type BuiltInTranslatorSession = {
   translate(text: string): Promise<string>;
@@ -32,7 +36,9 @@ export type BuiltInTranslatorApi = {
 };
 
 function defaultApi(): BuiltInTranslatorApi | undefined {
-  return (globalThis as typeof globalThis & { Translator?: BuiltInTranslatorApi }).Translator;
+  return (
+    globalThis as typeof globalThis & { Translator?: BuiltInTranslatorApi }
+  ).Translator;
 }
 
 export function createChromeTranslationProvider(
@@ -40,37 +46,65 @@ export function createChromeTranslationProvider(
   dictionaryFetcher: FetchLike = fetch,
 ): TranslationProvider {
   let sessionPromise: Promise<BuiltInTranslatorSession> | undefined;
+  let translationQueue: Promise<void> = Promise.resolve();
+  const dictionaryCache = new Map<string, Promise<Awaited<ReturnType<typeof fetchEnglishDictionaryLookup>>>>();
+
+  function lookupWord(text: string) {
+    const cacheKey = text.trim().toLocaleLowerCase('en');
+    let lookup = dictionaryCache.get(cacheKey);
+    if (!lookup) {
+      lookup = fetchEnglishDictionaryLookup(cacheKey, dictionaryFetcher);
+      dictionaryCache.set(cacheKey, lookup);
+      lookup.catch(() => dictionaryCache.delete(cacheKey));
+    }
+    return lookup;
+  }
+
+  async function discardSession(): Promise<void> {
+    const staleSession = sessionPromise;
+    sessionPromise = undefined;
+    if (!staleSession) return;
+
+    try {
+      const session = await staleSession;
+      session.destroy?.();
+    } catch {
+      // A rejected create promise has no live session to destroy.
+    }
+  }
 
   async function getSession(): Promise<BuiltInTranslatorSession> {
     const api = suppliedApi ?? defaultApi();
 
     if (!api) {
       throw new Error(
-        'Local translation is unavailable. Update desktop Chrome to version 138 or later.',
+        "Local translation is unavailable. Update desktop Chrome to version 138 or later.",
       );
     }
 
     const availability = await api.availability({
-      sourceLanguage: 'en',
-      targetLanguage: 'zh',
+      sourceLanguage: "en",
+      targetLanguage: "zh",
     });
 
-    if (availability === 'unavailable') {
-      throw new Error('Chrome does not support the English-to-Chinese language pack on this device.');
+    if (availability === "unavailable") {
+      throw new Error(
+        "Chrome does not support the English-to-Chinese language pack on this device.",
+      );
     }
 
     try {
       sessionPromise ??= api.create({
-        sourceLanguage: 'en',
-        targetLanguage: 'zh',
+        sourceLanguage: "en",
+        targetLanguage: "zh",
       });
       return await sessionPromise;
     } catch (error) {
       sessionPromise = undefined;
 
-      if (error instanceof DOMException && error.name === 'NotAllowedError') {
+      if (error instanceof DOMException && error.name === "NotAllowedError") {
         throw new Error(
-          'Chrome needs a click to download the local language pack. Click Translate / retry.',
+          "Chrome needs a browser click to prepare the local language pack. Open the Translator side panel, click Run local translation check once, then retry in Windows.",
         );
       }
 
@@ -78,46 +112,114 @@ export function createChromeTranslationProvider(
     }
   }
 
-  return {
-    async translate(request: TranslationRequest): Promise<TranslationResult> {
-      const text = validateEnglishTranslationInput(request.text);
-      const textKind = classifyText(text);
-      const session = await withTimeout(getSession());
-      const dictionaryResult =
-        textKind === 'word'
-          ? await withTimeout(
-              fetchEnglishDictionaryLookup(text, dictionaryFetcher).catch(() => undefined),
-              8_000,
-              'Dictionary lookup timed out.',
-            )
-          : undefined;
-      const translationInputs = dictionaryResult
-        ? [dictionaryResult.headword, ...dictionaryResult.definitions]
-        : [text];
-      const translatedSenses = await Promise.all(
-        translationInputs.map((input) => withTimeout(session.translate(input))),
+  async function translateSerially(
+    session: BuiltInTranslatorSession,
+    inputs: string[],
+  ): Promise<string[]> {
+    const translations: string[] = [];
+    for (const input of inputs) {
+      // Chrome Translator sessions are stateful and may fail when one session is
+      // asked to translate several dictionary senses concurrently.
+      translations.push(await withTimeout(session.translate(input)));
+    }
+    return translations;
+  }
+
+  async function translateWithFreshSessionRetry(
+    inputs: string[],
+  ): Promise<string[]> {
+    const session = await withTimeout(getSession());
+    try {
+      return await translateSerially(session, inputs);
+    } catch (firstError) {
+      await discardSession();
+      console.warn(
+        "[chrome-translation] Local session failed; retrying with a fresh session.",
+        {
+          error:
+            firstError instanceof Error
+              ? firstError.message
+              : String(firstError),
+        },
       );
-      const alternatives = translatedSenses
-        .map((value) => value.trim())
-        .filter(
-          (value, index, values) =>
-            value.length > 0 && values.indexOf(value) === index,
-        )
-        .slice(0, 3);
-      const normalizedTranslation = alternatives.join('；');
 
-      if (!normalizedTranslation) {
-        throw new Error('Chrome returned an empty translation. Try again.');
+      try {
+        const freshSession = await withTimeout(getSession());
+        return await translateSerially(freshSession, inputs);
+      } catch (retryError) {
+        await discardSession();
+        throw new Error(
+          "Chrome local translation failed after the session was reset. Reload the extension or restart Chrome, then retry.",
+          { cause: retryError },
+        );
       }
+    }
+  }
 
-      return {
-        originalText: text,
-        translatedText: normalizedTranslation,
-        textKind,
-        provider: 'chrome-local',
-        ...(dictionaryResult?.phonetic ? { phonetic: dictionaryResult.phonetic } : {}),
-        ...(alternatives.length > 1 ? { alternatives } : {}),
-      };
+  async function performTranslation(
+    request: TranslationRequest,
+  ): Promise<TranslationResult> {
+    const text = validateEnglishTranslationInput(request.text);
+    const textKind = classifyText(text);
+    let dictionaryUnavailable = false;
+    let dictionaryResult: Awaited<ReturnType<typeof fetchEnglishDictionaryLookup>>;
+    if (textKind === "word") {
+      try {
+        dictionaryResult = await withTimeout(
+          lookupWord(text),
+          8_000,
+          "Dictionary lookup timed out.",
+        );
+      } catch (error) {
+        dictionaryUnavailable = true;
+        console.warn(
+          "[chrome-translation] Dictionary unavailable; using basic local translation.",
+          { error: error instanceof Error ? error.message : String(error) },
+        );
+      }
+    }
+    const translationInputs = dictionaryResult
+      ? [dictionaryResult.headword, ...dictionaryResult.definitions]
+      : [text];
+    const translatedSenses =
+      await translateWithFreshSessionRetry(translationInputs);
+    const alternatives = translatedSenses
+      .map((value) => value.trim())
+      .filter(
+        (value, index, values) =>
+          value.length > 0 && values.indexOf(value) === index,
+      )
+      .slice(0, 3);
+    const normalizedTranslation = alternatives.join("；");
+
+    if (!normalizedTranslation) {
+      throw new Error("Chrome returned an empty translation. Try again.");
+    }
+
+    return {
+      originalText: text,
+      translatedText: normalizedTranslation,
+      textKind,
+      provider: dictionaryUnavailable
+        ? "chrome-local-dictionary-fallback"
+        : "chrome-local",
+      ...(dictionaryResult?.phonetic
+        ? { phonetic: dictionaryResult.phonetic }
+        : {}),
+      ...(alternatives.length > 1 ? { alternatives } : {}),
+    };
+  }
+
+  return {
+    translate(request: TranslationRequest): Promise<TranslationResult> {
+      const operation = translationQueue.then(() =>
+        performTranslation(request),
+      );
+      translationQueue = operation.then(
+        () => undefined,
+        () => undefined,
+      );
+      return operation;
     },
   };
 }

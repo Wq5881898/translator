@@ -1,6 +1,8 @@
 export const STAGE2_NATIVE_HOST = 'com.wq5881898.translator.stage2';
 export const STAGE2_PROTOCOL_VERSION = '1.0';
 export const STAGE2_MAX_TEXT_LENGTH = 5_000;
+export const STAGE2_VISIBLE_TRANSLATOR_PORT = 'stage2-translator-visible';
+export const STAGE2_OFFSCREEN_TRANSLATOR_PORT = 'stage2-translator-offscreen';
 
 export type Stage2BridgeEnvelope<T = unknown> = {
   protocolVersion: typeof STAGE2_PROTOCOL_VERSION;
@@ -54,11 +56,13 @@ export async function checkStage2NativeHost(): Promise<Stage2BridgeEnvelope> {
 
 type RuntimePort = ReturnType<typeof browser.runtime.connect>;
 
-let offscreenPort: RuntimePort | undefined;
-let offscreenPortPromise: Promise<RuntimePort> | undefined;
-const pendingOffscreenResponses = new Map<
+let visibleTranslatorPort: RuntimePort | undefined;
+let offscreenTranslatorPort: RuntimePort | undefined;
+let translatorPortPromise: Promise<RuntimePort> | undefined;
+const pendingTranslationResponses = new Map<
   string,
   {
+    port: RuntimePort;
     resolve: (response: Stage2BridgeEnvelope) => void;
     reject: (error: Error) => void;
     timeout: ReturnType<typeof setTimeout>;
@@ -67,33 +71,68 @@ const pendingOffscreenResponses = new Map<
 let nativePort: RuntimePort | undefined;
 let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 
-export function registerStage2OffscreenPort(port: RuntimePort): boolean {
-  if (port.name !== 'stage2-offscreen') return false;
-  offscreenPort = port;
+export function selectStage2TranslationPort<T>(
+  visiblePort: T | undefined,
+  offscreenPort: T | undefined,
+): T | undefined {
+  return visiblePort ?? offscreenPort;
+}
+
+export function shouldRecreateOffscreenDocument(
+  hasDocument: boolean,
+  hasConnectedPort: boolean,
+): boolean {
+  return hasDocument && !hasConnectedPort;
+}
+
+export function registerStage2TranslationPort(port: RuntimePort): boolean {
+  if (
+    port.name !== STAGE2_VISIBLE_TRANSLATOR_PORT &&
+    port.name !== STAGE2_OFFSCREEN_TRANSLATOR_PORT
+  ) return false;
+
+  if (port.name === STAGE2_VISIBLE_TRANSLATOR_PORT) {
+    visibleTranslatorPort = port;
+  } else {
+    offscreenTranslatorPort = port;
+  }
   port.onMessage.addListener((message: unknown) => {
     if (!isStage2BridgeEnvelope(message)) return;
-    const pending = pendingOffscreenResponses.get(message.requestId);
-    if (!pending) return;
+    const pending = pendingTranslationResponses.get(message.requestId);
+    if (!pending || pending.port !== port) return;
     clearTimeout(pending.timeout);
-    pendingOffscreenResponses.delete(message.requestId);
+    pendingTranslationResponses.delete(message.requestId);
     pending.resolve(message);
   });
   port.onDisconnect.addListener(() => {
-    if (offscreenPort === port) offscreenPort = undefined;
-    for (const [requestId, pending] of pendingOffscreenResponses) {
+    if (visibleTranslatorPort === port) visibleTranslatorPort = undefined;
+    if (offscreenTranslatorPort === port) offscreenTranslatorPort = undefined;
+    for (const [requestId, pending] of pendingTranslationResponses) {
+      if (pending.port !== port) continue;
       clearTimeout(pending.timeout);
       pending.reject(new Error('The local translation page disconnected. Retry.'));
-      pendingOffscreenResponses.delete(requestId);
+      pendingTranslationResponses.delete(requestId);
     }
   });
   return true;
 }
 
-async function ensureOffscreenPort(): Promise<RuntimePort> {
-  if (offscreenPort) return offscreenPort;
-  offscreenPortPromise ??= (async () => {
-    const hasDocument = await browser.offscreen.hasDocument();
-    if (!hasDocument) {
+async function ensureTranslationPort(): Promise<RuntimePort> {
+  if (visibleTranslatorPort) return visibleTranslatorPort;
+  if (offscreenTranslatorPort) return offscreenTranslatorPort;
+  translatorPortPromise ??= (async () => {
+    let hasDocument = await browser.offscreen.hasDocument();
+    if (shouldRecreateOffscreenDocument(
+      hasDocument,
+      Boolean(visibleTranslatorPort || offscreenTranslatorPort),
+    )) {
+      // Chrome can retain an offscreen document after its runtime Port has
+      // become detached from a restarted extension worker. Existence alone is
+      // therefore not a health check: close the orphan and create a fresh one.
+      await browser.offscreen.closeDocument();
+      hasDocument = false;
+    }
+    if (!hasDocument && !visibleTranslatorPort && !offscreenTranslatorPort) {
       await browser.offscreen.createDocument({
         url: 'offscreen.html',
         reasons: ['DOM_SCRAPING'],
@@ -102,31 +141,73 @@ async function ensureOffscreenPort(): Promise<RuntimePort> {
     }
 
     const deadline = Date.now() + 5_000;
-    while (!offscreenPort && Date.now() < deadline) {
+    while (!visibleTranslatorPort && !offscreenTranslatorPort && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
-    if (!offscreenPort) {
+    const port = selectStage2TranslationPort(visibleTranslatorPort, offscreenTranslatorPort);
+    if (!port) {
       throw new Error('The local translation page did not start. Reload the extension.');
     }
-    return offscreenPort;
+    return port;
   })().finally(() => {
-    offscreenPortPromise = undefined;
+    translatorPortPromise = undefined;
   });
-  return offscreenPortPromise;
+  return translatorPortPromise;
 }
 
-async function requestOffscreenTranslation(
+async function resetOffscreenTranslationPage(): Promise<void> {
+  if (visibleTranslatorPort) return;
+
+  const stalePort = offscreenTranslatorPort;
+  offscreenTranslatorPort = undefined;
+  try {
+    stalePort?.disconnect();
+  } catch {
+    // The stale Port may already have been disconnected by Chrome.
+  }
+
+  try {
+    if (await browser.offscreen.hasDocument()) {
+      await browser.offscreen.closeDocument();
+    }
+  } catch {
+    // A concurrent Chrome cleanup may already have removed the document.
+  }
+}
+
+async function requestTranslationOnce(
   request: Stage2BridgeEnvelope<Stage2TranslationPayload>,
 ): Promise<Stage2BridgeEnvelope> {
-  const port = await ensureOffscreenPort();
+  const port = await ensureTranslationPort();
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
-      pendingOffscreenResponses.delete(request.requestId);
+      pendingTranslationResponses.delete(request.requestId);
       reject(new Error('Chrome local translation timed out. Retry.'));
     }, 35_000);
-    pendingOffscreenResponses.set(request.requestId, { resolve, reject, timeout });
+    pendingTranslationResponses.set(request.requestId, { port, resolve, reject, timeout });
     port.postMessage(request);
   });
+}
+
+async function requestTranslation(
+  request: Stage2BridgeEnvelope<Stage2TranslationPayload>,
+): Promise<Stage2BridgeEnvelope> {
+  try {
+    return await requestTranslationOnce(request);
+  } catch (firstError) {
+    // A sleeping/restarted Chrome worker can leave an orphaned offscreen page
+    // or disconnect its Port between the health check and the request. Rebuild
+    // once and replay the same idempotent translation request.
+    await resetOffscreenTranslationPage();
+    try {
+      return await requestTranslationOnce(request);
+    } catch (retryError) {
+      throw new Error(
+        'Chrome translation could not recover after rebuilding its local page. Reload the extension or restart Chrome.',
+        { cause: retryError ?? firstError },
+      );
+    }
+  }
 }
 
 async function handleNativeRequest(
@@ -166,7 +247,7 @@ async function handleNativeRequest(
   }
 
   try {
-    const response = await requestOffscreenTranslation(
+    const response = await requestTranslation(
       message as Stage2BridgeEnvelope<Stage2TranslationPayload>,
     );
     port.postMessage(response);

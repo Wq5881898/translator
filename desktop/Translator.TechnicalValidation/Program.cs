@@ -187,12 +187,14 @@ static async Task ValidateMockAsync()
 static async Task ValidateFramingAsync()
 {
     var expected = new BridgeEnvelope(BridgeEnvelope.CurrentVersion, "bridge.health", "r2", DateTimeOffset.UtcNow,
-        JsonSerializer.SerializeToElement(new { text = "Hello 世界" }));
+        JsonSerializer.SerializeToElement(new { text = "Hello 世界", phonetic = "/ˌkɒnsəlˈteɪʃən/" }));
     await using var stream = new MemoryStream();
     await NativeMessageFraming.WriteAsync(stream, expected, CancellationToken.None);
     stream.Position = 0;
     var actual = await NativeMessageFraming.ReadAsync(stream, CancellationToken.None);
     Assert(actual?.Payload.GetProperty("text").GetString() == "Hello 世界", "UTF-8 payload failed.");
+    Assert(actual?.Payload.GetProperty("phonetic").GetString() == "/ˌkɒnsəlˈteɪʃən/",
+        "IPA payload was corrupted during the UTF-8 bridge round-trip.");
 }
 static async Task ValidateInvalidLengthAsync()
 {
@@ -203,6 +205,12 @@ static async Task ValidateInvalidLengthAsync()
 }
 static async Task ValidateNativeHostRelayAsync()
 {
+    var previousPipeName = Environment.GetEnvironmentVariable(
+        BridgeEnvelope.PipeNameEnvironmentVariable);
+    var isolatedPipeName = $"{BridgeEnvelope.DefaultPipeName}.validation.{Guid.NewGuid():N}";
+    Environment.SetEnvironmentVariable(
+        BridgeEnvelope.PipeNameEnvironmentVariable,
+        isolatedPipeName);
     var desktopRoot = Path.GetFullPath(Path.Combine(
         AppContext.BaseDirectory,
         "..",
@@ -217,24 +225,13 @@ static async Task ValidateNativeHostRelayAsync()
         "net10.0-windows10.0.19041.0",
         "Translator.BridgeHost.exe");
     Assert(File.Exists(hostPath), $"Bridge Host was not built: {hostPath}");
-    using var process = Process.Start(new ProcessStartInfo(hostPath)
-    {
-        RedirectStandardInput = true,
-        RedirectStandardOutput = true,
-        RedirectStandardError = true,
-        UseShellExecute = false,
-        CreateNoWindow = true,
-    }) ?? throw new InvalidOperationException("Bridge Host could not be started.");
+    using var process = Process.Start(CreateBridgeHostStartInfo(hostPath, isolatedPipeName))
+        ?? throw new InvalidOperationException("Bridge Host could not be started.");
     try
     {
-        using var favoritesProcess = Process.Start(new ProcessStartInfo(hostPath)
-        {
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        }) ?? throw new InvalidOperationException("Concurrent favorites Bridge Host could not be started.");
+        using var favoritesProcess = Process.Start(
+            CreateBridgeHostStartInfo(hostPath, isolatedPipeName))
+            ?? throw new InvalidOperationException("Concurrent favorites Bridge Host could not be started.");
         var favoritesRequest = BridgeEnvelope.Create(
             "favorites.read",
             "concurrent-favorites-read",
@@ -290,7 +287,24 @@ static async Task ValidateNativeHostRelayAsync()
             process.Kill(entireProcessTree: true);
             await process.WaitForExitAsync();
         }
+        Environment.SetEnvironmentVariable(
+            BridgeEnvelope.PipeNameEnvironmentVariable,
+            previousPipeName);
     }
+}
+
+static ProcessStartInfo CreateBridgeHostStartInfo(string hostPath, string pipeName)
+{
+    var startInfo = new ProcessStartInfo(hostPath)
+    {
+        RedirectStandardInput = true,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        UseShellExecute = false,
+        CreateNoWindow = true,
+    };
+    startInfo.Environment[BridgeEnvelope.PipeNameEnvironmentVariable] = pipeName;
+    return startInfo;
 }
 static Task ValidateGlobalShortcutContractAsync()
 {

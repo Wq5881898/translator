@@ -130,5 +130,151 @@ describe('ChromeTranslationProvider', () => {
     expect(result.phonetic).toBe('/ˈɡrɑːntɪd/');
     expect(translate).not.toHaveBeenCalledWith('granted');
   });
+
+  it('translates dictionary senses serially on a single Chrome session', async () => {
+    let activeTranslations = 0;
+    let maximumConcurrency = 0;
+    const translate = vi.fn(async (text: string) => {
+      activeTranslations += 1;
+      maximumConcurrency = Math.max(maximumConcurrency, activeTranslations);
+      await Promise.resolve();
+      activeTranslations -= 1;
+      return `zh:${text}`;
+    });
+    const translatorApi: BuiltInTranslatorApi = {
+      availability: vi.fn(async () => 'available' as const),
+      create: vi.fn(async () => ({ translate })),
+    };
+    const dictionaryFetcher = vi.fn(async () =>
+      new Response(
+        JSON.stringify([
+          {
+            word: 'whoosh',
+            meanings: [
+              { definitions: [{ definition: 'To move swiftly with a rushing sound.' }] },
+              { definitions: [{ definition: 'A sudden rushing sound.' }] },
+            ],
+          },
+        ]),
+        { status: 200 },
+      ),
+    );
+    const provider = createChromeTranslationProvider(translatorApi, dictionaryFetcher);
+
+    await provider.translate({
+      text: 'whoosh',
+      sourceLanguage: 'en',
+      targetLanguage: 'zh-CN',
+    });
+
+    expect(maximumConcurrency).toBe(1);
+    expect(translate).toHaveBeenCalledTimes(3);
+  });
+
+  it('destroys a failed session and retries once with a fresh session', async () => {
+    const destroyFirst = vi.fn();
+    const firstTranslate = vi.fn(async () => {
+      throw new DOMException('Other generic failures occurred.', 'OperationError');
+    });
+    const secondTranslate = vi.fn(async () => '嗖的一声');
+    const translatorApi: BuiltInTranslatorApi = {
+      availability: vi.fn(async () => 'available' as const),
+      create: vi
+        .fn()
+        .mockResolvedValueOnce({ translate: firstTranslate, destroy: destroyFirst })
+        .mockResolvedValueOnce({ translate: secondTranslate, destroy: vi.fn() }),
+    };
+    const dictionaryFetcher = vi.fn(async () => new Response('', { status: 404 }));
+    const provider = createChromeTranslationProvider(translatorApi, dictionaryFetcher);
+
+    const recovered = await provider.translate({
+      text: 'whoosh',
+      sourceLanguage: 'en',
+      targetLanguage: 'zh-CN',
+    });
+    const next = await provider.translate({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguage: 'zh-CN',
+    });
+
+    expect(recovered.translatedText).toBe('嗖的一声');
+    expect(next.translatedText).toBe('嗖的一声');
+    expect(destroyFirst).toHaveBeenCalledOnce();
+    expect(translatorApi.create).toHaveBeenCalledTimes(2);
+  });
+
+  it('serializes separate translation requests that share one session', async () => {
+    let activeTranslations = 0;
+    let maximumConcurrency = 0;
+    const translate = vi.fn(async (text: string) => {
+      activeTranslations += 1;
+      maximumConcurrency = Math.max(maximumConcurrency, activeTranslations);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      activeTranslations -= 1;
+      return `zh:${text}`;
+    });
+    const translatorApi: BuiltInTranslatorApi = {
+      availability: vi.fn(async () => 'available' as const),
+      create: vi.fn(async () => ({ translate })),
+    };
+    const dictionaryFetcher = vi.fn(async () => new Response('', { status: 404 }));
+    const provider = createChromeTranslationProvider(translatorApi, dictionaryFetcher);
+
+    await Promise.all([
+      provider.translate({ text: 'baby', sourceLanguage: 'en', targetLanguage: 'zh-CN' }),
+      provider.translate({ text: 'hello', sourceLanguage: 'en', targetLanguage: 'zh-CN' }),
+    ]);
+
+    expect(maximumConcurrency).toBe(1);
+  });
+
+  it('caches a complete dictionary result so repeated manual clicks stay identical', async () => {
+    const translate = vi.fn(async (text: string) => ({
+      crouch: '蹲伏',
+      'To bend low.': '弯低身体',
+    })[text] ?? text);
+    const translatorApi: BuiltInTranslatorApi = {
+      availability: vi.fn(async () => 'available' as const),
+      create: vi.fn(async () => ({ translate })),
+    };
+    const dictionaryFetcher = vi.fn(async () => new Response(JSON.stringify([{
+      word: 'crouch',
+      phonetic: '/kɹaʊt͡ʃ/',
+      meanings: [{ definitions: [{ definition: 'To bend low.' }] }],
+    }])));
+    const provider = createChromeTranslationProvider(translatorApi, dictionaryFetcher);
+
+    const first = await provider.translate({ text: 'crouch', sourceLanguage: 'en', targetLanguage: 'zh-CN' });
+    const second = await provider.translate({ text: 'crouch', sourceLanguage: 'en', targetLanguage: 'zh-CN' });
+
+    expect(second).toMatchObject({ translatedText: first.translatedText, phonetic: first.phonetic });
+    expect(dictionaryFetcher).toHaveBeenCalledOnce();
+  });
+
+  it('falls back to basic Chrome translation when the online dictionary fails', async () => {
+    const translate = vi.fn(async (text: string) => `zh:${text}`);
+    const translatorApi: BuiltInTranslatorApi = {
+      availability: vi.fn(async () => 'available' as const),
+      create: vi.fn(async () => ({ translate })),
+    };
+    const dictionaryFetcher = vi.fn(async () => {
+      throw new TypeError('Network unavailable');
+    });
+    const provider = createChromeTranslationProvider(translatorApi, dictionaryFetcher);
+
+    const result = await provider.translate({
+      text: 'baby',
+      sourceLanguage: 'en',
+      targetLanguage: 'zh-CN',
+    });
+
+    expect(result).toMatchObject({
+      translatedText: 'zh:baby',
+      provider: 'chrome-local-dictionary-fallback',
+    });
+    expect(result.phonetic).toBeUndefined();
+    expect(dictionaryFetcher).toHaveBeenCalledTimes(3);
+  });
 });
 

@@ -1,7 +1,7 @@
 type DictionaryEntry = {
   word?: string;
   phonetic?: string;
-  phonetics?: Array<{ text?: string }>;
+  phonetics?: Array<{ text?: string; audio?: string }>;
   meanings?: Array<{
     partOfSpeech?: string;
     definitions?: Array<{ definition?: string }>;
@@ -49,17 +49,68 @@ async function fetchEntries(
   word: string,
   fetcher: FetchLike,
 ): Promise<DictionaryEntry[] | undefined> {
-  const response = await fetcher(
-    `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`,
-  );
-  if (!response.ok) return undefined;
-  const entries = (await response.json()) as DictionaryEntry[];
-  return entries.length ? entries : undefined;
+  const url = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetcher(url);
+      if (!response.ok) return undefined;
+      const entries = (await response.json()) as DictionaryEntry[];
+      return entries.length ? entries : undefined;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 150 : 450));
+      }
+    }
+  }
+
+  throw lastError;
 }
 
 function phoneticFrom(entries?: DictionaryEntry[]): string | undefined {
   const entry = entries?.[0];
-  return entry?.phonetic || entry?.phonetics?.find((item) => item.text)?.text;
+  const phonetics = entry?.phonetics ?? [];
+  const candidates = [
+    ...phonetics.filter((item) => /-us\.mp3(?:\?|$)/iu.test(item.audio ?? '')).map((item) => item.text),
+    entry?.phonetic,
+    ...phonetics.map((item) => item.text),
+  ];
+  for (const candidate of candidates) {
+    const normalized = normalizePhonetic(candidate);
+    if (normalized) return normalized;
+  }
+  return undefined;
+}
+
+/**
+ * Keeps dictionary IPA intact while replacing syllabic-consonant combining
+ * marks that are rendered as missing glyphs by common Windows UI fonts.
+ * The replacements are phonemically equivalent, familiar IPA spellings.
+ */
+export function normalizePhonetic(value?: string): string | undefined {
+  if (!value) return undefined;
+  const normalized = value
+    .normalize('NFC')
+    .replace(/l\u0329/gu, 'əl')
+    .replace(/n\u0329/gu, 'ən')
+    .replace(/m\u0329/gu, 'əm')
+    // Use the learner-dictionary spelling used by Oxford/Longman-style
+    // displays. U+0279 is valid IPA, but looks like a corrupted character to
+    // many learners and differs from the pronunciation convention in Stage 1.
+    .replace(/ɹ/gu, 'r')
+    .replace(/ɚ/gu, 'ər')
+    .replace(/\(j\)/gu, 'j')
+    .replace(/\./gu, '')
+    // Combining tie bars render as detached arcs in common Windows fonts.
+    // tʃ/dʒ are the equivalent, familiar learner-dictionary spellings.
+    .replace(/[\u035c\u0361]/gu, '')
+    .trim();
+  if (!normalized || /[\u0000-\u001f\u007f\ufffd\ue000-\uf8ff]/u.test(normalized)) {
+    return undefined;
+  }
+  return normalized;
 }
 
 function definitionsFrom(entries?: DictionaryEntry[]): string[] {
@@ -81,12 +132,18 @@ export async function fetchEnglishDictionaryLookup(
   let preferredEntries = originalEntries;
   let headword = originalEntries?.[0]?.word?.trim() || normalized;
 
-  for (const candidate of lemmaCandidates(normalized)) {
-    const candidateEntries = await fetchEntries(candidate, fetcher);
-    if (candidateEntries) {
-      preferredEntries = candidateEntries;
-      headword = candidateEntries[0]?.word?.trim() || candidate;
-      break;
+  // A real entry for the selected word is authoritative. Earlier versions
+  // always tried guessed lemmas, which turned "during" into the unrelated
+  // dictionary headword "dur". Only fall back to inflection guesses when the
+  // original lookup is absent or contains no usable definitions.
+  if (!originalEntries || definitionsFrom(originalEntries).length === 0) {
+    for (const candidate of lemmaCandidates(normalized)) {
+      const candidateEntries = await fetchEntries(candidate, fetcher);
+      if (candidateEntries) {
+        preferredEntries = candidateEntries;
+        headword = candidateEntries[0]?.word?.trim() || candidate;
+        break;
+      }
     }
   }
 

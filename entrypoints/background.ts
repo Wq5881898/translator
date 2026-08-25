@@ -9,7 +9,7 @@ import { normalizeSelection } from '../src/core/selection';
 import { mockTranslationProvider } from '../src/providers/mock-translation-provider';
 import {
   checkStage2NativeHost,
-  registerStage2OffscreenPort,
+  registerStage2TranslationPort,
   startStage2NativeBridge,
 } from '../src/core/stage2-bridge';
 
@@ -47,7 +47,7 @@ async function captureSelection(
 
 export default defineBackground(() => {
   browser.runtime.onConnect.addListener((port) => {
-    registerStage2OffscreenPort(port);
+    registerStage2TranslationPort(port);
   });
   startStage2NativeBridge();
   browser.runtime.onStartup.addListener(startStage2NativeBridge);

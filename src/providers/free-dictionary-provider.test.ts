@@ -1,0 +1,100 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { fetchEnglishDictionaryLookup, normalizePhonetic } from './free-dictionary-provider';
+
+describe('free dictionary phonetics', () => {
+  it('renders the consultation phonetic without a missing combining glyph', async () => {
+    const fetcher = async () =>
+      new Response(
+        JSON.stringify([
+          {
+            word: 'consultation',
+            phonetic: '/ˌkɒnsl̩ˈteɪʃən/',
+            meanings: [{ definitions: [{ definition: 'The act of consulting.' }] }],
+          },
+        ]),
+      );
+
+    const result = await fetchEnglishDictionaryLookup('consultation', fetcher);
+
+    expect(result?.phonetic).toBe('/ˌkɒnsəlˈteɪʃən/');
+  });
+
+  it('rejects a corrupted phonetic and uses the next valid dictionary value', async () => {
+    const fetcher = async () =>
+      new Response(
+        JSON.stringify([
+          {
+            word: 'word',
+            phonetic: '/wɜːd�/',
+            phonetics: [{ text: '/wɜːd/' }],
+            meanings: [],
+          },
+        ]),
+      );
+
+    const result = await fetchEnglishDictionaryLookup('word', fetcher);
+
+    expect(result?.phonetic).toBe('/wɜːd/');
+  });
+
+  it('normalizes other syllabic consonants without altering ordinary IPA', () => {
+    expect(normalizePhonetic('/ˈbʌtn̩/')).toBe('/ˈbʌtən/');
+    expect(normalizePhonetic('/həˈləʊ/')).toBe('/həˈləʊ/');
+    expect(normalizePhonetic('/pɹaʊd/')).toBe('/praʊd/');
+    expect(normalizePhonetic('/kɹaʊt͡ʃ/')).toBe('/kraʊtʃ/');
+    expect(normalizePhonetic('/d͜ʒʌdʒ/')).toBe('/dʒʌdʒ/');
+  });
+
+  it('keeps a valid original entry instead of replacing during with dur', async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      if (!url.endsWith('/during')) throw new Error(`unexpected lemma request: ${url}`);
+      return new Response(JSON.stringify([{ word: 'during', phonetic: '/ˈdjʊəɹɪŋ/', meanings: [{ definitions: [{ definition: 'Throughout the course of.' }] }] }]));
+    });
+
+    const result = await fetchEnglishDictionaryLookup('During', fetcher);
+
+    expect(result).toEqual({ headword: 'during', phonetic: '/ˈdjʊərɪŋ/', definitions: ['Throughout the course of.'] });
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it('prefers an explicitly tagged US pronunciation over an uncommon first variant', async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify([{
+      word: 'during',
+      phonetic: '/ˈdjɔː.ɹɪŋ/',
+      phonetics: [
+        { text: '/ˈdjɔː.ɹɪŋ/' },
+        { text: '/ˈd(j)ʊɚ.ɪŋ/', audio: 'https://example.test/during-us.mp3' },
+      ],
+      meanings: [{ definitions: [{ definition: 'For all of a given time interval.' }] }],
+    }])));
+
+    const result = await fetchEnglishDictionaryLookup('during', fetcher);
+
+    expect(result?.phonetic).toBe('/ˈdjʊərɪŋ/');
+  });
+
+  it('retries one transient first lookup failure before falling back', async () => {
+    const fetcher = vi.fn()
+      .mockRejectedValueOnce(new TypeError('temporary network failure'))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ word: 'proud', phonetic: '/pɹaʊd/', meanings: [{ definitions: [{ definition: 'Feeling deep pleasure or satisfaction.' }] }, { definitions: [{ definition: 'Having a high opinion of oneself.' }] }] }])));
+
+    const result = await fetchEnglishDictionaryLookup('proud', fetcher);
+
+    expect(result).toEqual({ headword: 'proud', phonetic: '/praʊd/', definitions: ['Feeling deep pleasure or satisfaction.', 'Having a high opinion of oneself.'] });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('recovers within one lookup when the first two network attempts fail', async () => {
+    const fetcher = vi.fn()
+      .mockRejectedValueOnce(new TypeError('first transient failure'))
+      .mockRejectedValueOnce(new TypeError('second transient failure'))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ word: 'crouch', phonetic: '/kɹaʊt͡ʃ/', meanings: [{ definitions: [{ definition: 'To bend low.' }] }] }])));
+
+    const result = await fetchEnglishDictionaryLookup('crouch', fetcher);
+
+    expect(result?.phonetic).toBe('/kraʊtʃ/');
+    expect(result?.definitions).toEqual(['To bend low.']);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+});

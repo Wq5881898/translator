@@ -33,9 +33,15 @@ import {
   type TranslatorSettings,
 } from '../../src/core/settings';
 import { browserSpeechPlayer } from '../../src/core/speech';
+import {
+  startStage2TranslationWorker,
+  STAGE2_VISIBLE_TRANSLATOR_PORT,
+} from '../../src/core/stage2-translation-worker';
 import { createAzureTranslationProvider } from '../../src/providers/azure-translation-provider';
 import { chromeTranslationProvider } from '../../src/providers/chrome-translation-provider';
 import type { TranslationResult } from '../../src/providers/translation-provider';
+
+startStage2TranslationWorker(STAGE2_VISIBLE_TRANSLATOR_PORT);
 
 function selectionFromResponse(response: ExtensionResponse): SelectionTranslation | null {
   if (!response.ok || !('data' in response) || response.data === null) {

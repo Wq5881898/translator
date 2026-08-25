@@ -1,5 +1,5 @@
 #define MyAppName "Translator"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.1.5"
 #define MyAppPublisher "Wq5881898"
 
 [Setup]
@@ -7,7 +7,7 @@ AppId={{4C38E346-74E1-4A45-94D3-5881898A20E2}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={localappdata}\Programs\Translator
+DefaultDirName={%LOCALAPPDATA}\Programs\Translator
 DefaultGroupName=Translator
 DisableProgramGroupPage=yes
 OutputDir=..\installer-output
@@ -26,6 +26,8 @@ Source: "..\staging\bridge-host\*"; DestDir: "{app}\bridge-host"; Flags: ignorev
 Source: "..\staging\extension\*"; DestDir: "{app}\extension"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\staging\BATCH_E_TEST_GUIDE_ZH.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "..\staging\STAGE2_DESIGN_ZH.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "..\staging\TEST_REPORT_V1.1.5_FINAL_ZH.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "..\staging\STAGE2_FINAL_USER_GUIDE_ZH.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "INSTALL_AFTER_SETUP_ZH.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
@@ -35,8 +37,8 @@ Name: "{autoprograms}\Translator 浏览器插件文件夹"; Filename: "{app}\ext
 Name: "{autoprograms}\Translator 安装说明"; Filename: "{app}\INSTALL_AFTER_SETUP_ZH.txt"
 
 [Registry]
-Root: HKCU64; Subkey: "Software\Google\Chrome\NativeMessagingHosts\com.wq5881898.translator.stage2"; ValueType: string; ValueName: ""; ValueData: "{localappdata}\Translator\bridge\com.wq5881898.translator.stage2.json"; Flags: uninsdeletekey
-Root: HKCU32; Subkey: "Software\Google\Chrome\NativeMessagingHosts\com.wq5881898.translator.stage2"; ValueType: string; ValueName: ""; ValueData: "{localappdata}\Translator\bridge\com.wq5881898.translator.stage2.json"; Flags: uninsdeletekey
+Root: HKCU64; Subkey: "Software\Google\Chrome\NativeMessagingHosts\com.wq5881898.translator.stage2"; ValueType: string; ValueName: ""; ValueData: "{%LOCALAPPDATA}\Translator\bridge\com.wq5881898.translator.stage2.json"; Flags: uninsdeletekey
+Root: HKCU32; Subkey: "Software\Google\Chrome\NativeMessagingHosts\com.wq5881898.translator.stage2"; ValueType: string; ValueName: ""; ValueData: "{%LOCALAPPDATA}\Translator\bridge\com.wq5881898.translator.stage2.json"; Flags: uninsdeletekey
 
 [Run]
 Filename: "{app}\desktop\Translator.Desktop.exe"; Description: "启动 Translator"; Flags: nowait postinstall skipifsilent
@@ -44,8 +46,8 @@ Filename: "{app}\extension"; Description: "打开浏览器插件文件夹"; Flag
 Filename: "{app}\INSTALL_AFTER_SETUP_ZH.txt"; Description: "查看浏览器插件安装说明"; Flags: shellexec postinstall unchecked skipifsilent
 
 [UninstallDelete]
-Type: files; Name: "{localappdata}\Translator\bridge\com.wq5881898.translator.stage2.json"
-Type: dirifempty; Name: "{localappdata}\Translator\bridge"
+Type: files; Name: "{%LOCALAPPDATA}\Translator\bridge\com.wq5881898.translator.stage2.json"
+Type: dirifempty; Name: "{%LOCALAPPDATA}\Translator\bridge"
 
 [Code]
 procedure RunHiddenAndWait(FileName: String; Parameters: String);
@@ -62,21 +64,34 @@ begin
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Attempt: Integer;
 begin
-  { Keep the registry entry stable. Removing only the manifest prevents Chrome
-    from restarting the old Native Host while upgrade files are replaced. }
+  { Chrome may cache the manifest and immediately restart an old Native Host.
+    Temporarily remove both registry views before terminating it. The [Registry]
+    entries and post-install registration restore them after files are replaced. }
+  RegDeleteKeyIncludingSubkeys(
+    HKCU64,
+    'Software\Google\Chrome\NativeMessagingHosts\com.wq5881898.translator.stage2');
+  RegDeleteKeyIncludingSubkeys(
+    HKCU32,
+    'Software\Google\Chrome\NativeMessagingHosts\com.wq5881898.translator.stage2');
   DeleteFile(
     ExpandConstant(
-      '{localappdata}\Translator\bridge\com.wq5881898.translator.stage2.json'));
+      '{%LOCALAPPDATA}\Translator\bridge\com.wq5881898.translator.stage2.json'));
 
   { Release application and runtime files before an in-place upgrade. }
+  for Attempt := 1 to 3 do
+  begin
+    RunHiddenAndWait(
+      ExpandConstant('{sys}\taskkill.exe'),
+      '/f /t /im Translator.BridgeHost.exe');
+    Sleep(500);
+  end;
   RunHiddenAndWait(
     ExpandConstant('{sys}\taskkill.exe'),
-    '/f /im Translator.BridgeHost.exe');
-  RunHiddenAndWait(
-    ExpandConstant('{sys}\taskkill.exe'),
-    '/f /im Translator.Desktop.exe');
-  Sleep(500);
+    '/f /t /im Translator.Desktop.exe');
+  Sleep(1000);
   Result := '';
 end;
 
@@ -89,7 +104,7 @@ var
   Manifest: String;
   RegistrationResult: Integer;
 begin
-  ManifestDirectory := ExpandConstant('{localappdata}\Translator\bridge');
+  ManifestDirectory := ExpandConstant('{%LOCALAPPDATA}\Translator\bridge');
   ManifestPath := ManifestDirectory + '\com.wq5881898.translator.stage2.json';
   HostPath := ExpandConstant('{app}\bridge-host\Translator.BridgeHost.exe');
   EscapedHostPath := HostPath;

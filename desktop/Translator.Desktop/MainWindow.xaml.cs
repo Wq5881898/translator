@@ -202,32 +202,32 @@ public partial class MainWindow : Window
 
     private async Task TranslateCurrentTextAsync()
     {
-        EnsureBridgeRegistration();
-        _currentTranslation = null;
-        FavoriteButton.Content = "♡";
-        PhoneticText.Text = string.Empty;
-        SpeakButton.IsEnabled = false;
-        TranslatedText.Clear();
-        if (string.IsNullOrWhiteSpace(RecognizedText.Text))
-        {
-            StatusText.Text = "There is no English text to translate.";
-            return;
-        }
-
-        StatusText.Text = "Checking the Chrome translation bridge...";
-        var health = await _translation.CheckHealthAsync(CancellationToken.None);
-        if (!health.IsAvailable)
-        {
-            StatusText.Text =
-                $"Translation could not start: {health.Message} " +
-                "Keep Chrome open, enable the Translator extension, then retry.";
-            return;
-        }
-
-        StatusText.Text =
-            "Translating locally in Chrome. First-time language-pack setup may take up to 35 seconds...";
         try
         {
+            EnsureBridgeRegistration();
+            _currentTranslation = null;
+            FavoriteButton.Content = "♡";
+            PhoneticText.Text = string.Empty;
+            SpeakButton.IsEnabled = false;
+            TranslatedText.Clear();
+            if (string.IsNullOrWhiteSpace(RecognizedText.Text))
+            {
+                StatusText.Text = "There is no English text to translate.";
+                return;
+            }
+
+            StatusText.Text = "Checking the Chrome translation bridge...";
+            var health = await _translation.CheckHealthAsync(CancellationToken.None);
+            if (!health.IsAvailable)
+            {
+                StatusText.Text =
+                    $"Translation could not start: {health.Message} " +
+                    "Keep Chrome open, enable the Translator extension, then retry.";
+                return;
+            }
+
+            StatusText.Text =
+                "Connecting to Chrome, checking the dictionary, and translating locally...";
             var result = await _translation.TranslateAsync(
                 new TranslationRequest(Guid.NewGuid().ToString("N"), RecognizedText.Text),
                 CancellationToken.None);
@@ -238,12 +238,24 @@ public partial class MainWindow : Window
             _currentTranslation = result;
             SpeakButton.IsEnabled = true;
             await RefreshFavoriteButtonAsync();
-            StatusText.Text = "Translation complete.";
+            StatusText.Text = result.Provider == "chrome-local-dictionary-fallback"
+                ? "Basic translation complete. The dictionary was unavailable, so phonetics and extended meanings may be missing."
+                : "Translation complete.";
         }
         catch (Exception exception)
         {
+            DesktopErrorLog.Write("Translation operation failed", exception);
             StatusText.Text = $"Translation failed: {FriendlyError(exception)}";
         }
+    }
+
+    internal void ReportUnexpectedError(Exception exception)
+    {
+        DesktopErrorLog.Write("Recovered dispatcher exception", exception);
+        RestoreWindow();
+        SetBusy(false);
+        StatusText.Text =
+            $"Translator recovered from an unexpected error: {FriendlyError(exception)} Please retry.";
     }
 
     private async void FavoriteButton_Click(object sender, RoutedEventArgs e)
