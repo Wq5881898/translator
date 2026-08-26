@@ -49,7 +49,6 @@ export function createChromeTranslationProvider(
   let translationQueue: Promise<void> = Promise.resolve();
   let latestQueuedRequest = 0;
   const dictionaryCache = new Map<string, Promise<Awaited<ReturnType<typeof fetchEnglishDictionaryLookup>>>>();
-  const dictionaryRetryAfter = new Map<string, number>();
 
   function lookupWord(text: string) {
     const cacheKey = text.trim().toLocaleLowerCase('en');
@@ -171,42 +170,38 @@ export function createChromeTranslationProvider(
     let dictionaryResult: Awaited<ReturnType<typeof fetchEnglishDictionaryLookup>>;
     if (textKind === "word") {
       const dictionaryKey = text.toLocaleLowerCase('en');
-      if ((dictionaryRetryAfter.get(dictionaryKey) ?? 0) > Date.now()) {
+      try {
+        dictionaryResult = await withTimeout(
+          lookupWord(text),
+          1_200,
+          "Dictionary lookup timed out.",
+        );
+      } catch (error) {
         dictionaryUnavailable = true;
-      } else {
-        try {
-          dictionaryResult = await withTimeout(
-            lookupWord(text),
-            3_000,
-            "Dictionary lookup timed out.",
-          );
-          dictionaryRetryAfter.delete(dictionaryKey);
-        } catch (error) {
-          dictionaryUnavailable = true;
-          dictionaryCache.delete(dictionaryKey);
-          // Do not let repeated clicks alternate between a fast basic result
-          // and a late dictionary result. Retry the dictionary after a short
-          // cooldown while local Chrome translation remains immediately usable.
-          dictionaryRetryAfter.set(dictionaryKey, Date.now() + 5 * 60_000);
-          console.warn(
-            "[chrome-translation] Dictionary unavailable; using basic local translation.",
-            { error: error instanceof Error ? error.message : String(error) },
-          );
-        }
+        dictionaryCache.delete(dictionaryKey);
+        console.warn(
+          "[chrome-translation] Dictionary unavailable; using basic local translation.",
+          { error: error instanceof Error ? error.message : String(error) },
+        );
       }
     }
-    const translationInputs = dictionaryResult
-      ? [dictionaryResult.headword, ...dictionaryResult.definitions]
+    // A single combined call is materially faster than translating the
+    // headword and every definition one by one. Newlines are retained by the
+    // local Translator API and make the result readable even if punctuation
+    // is normalized by the model.
+    const translationInputs = dictionaryResult?.definitions.length
+      ? [[dictionaryResult.headword, ...dictionaryResult.definitions].join('\n')]
       : [text];
     const translatedSenses =
       await translateWithFreshSessionRetry(translationInputs);
     const alternatives = translatedSenses
-      .map((value) => value.trim())
+      .flatMap((value) => value.split(/\r?\n|；/u))
+      .map((value) => value.trim().replace(/^\d+[.)、:]\s*/u, ''))
       .filter(
         (value, index, values) =>
           value.length > 0 && values.indexOf(value) === index,
       )
-      .slice(0, 3);
+      .slice(0, 4);
     const normalizedTranslation = alternatives.join("；");
 
     if (!normalizedTranslation) {
@@ -222,6 +217,15 @@ export function createChromeTranslationProvider(
         : "chrome-local",
       ...(dictionaryResult?.phonetic
         ? { phonetic: dictionaryResult.phonetic }
+        : {}),
+      ...(dictionaryResult?.senses.length
+        ? {
+            partsOfSpeech: [...new Set(
+              dictionaryResult.senses
+                .map((sense) => sense.partOfSpeech)
+                .filter((value): value is string => Boolean(value)),
+            )],
+          }
         : {}),
       ...(alternatives.length > 1 ? { alternatives } : {}),
     };

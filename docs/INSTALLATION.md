@@ -1,8 +1,8 @@
 # Installation and Update Guide
 
-## Stage 2 Windows final (v1.1.6)
+## Stage 2 Windows final (v1.1.7)
 
-1. Run `Translator-Setup-v1.1.6.exe`. It installs per user and does not require PowerShell or manual Bridge registry editing.
+1. Run `Translator-Setup-v1.1.7.exe`. It installs per user and does not require PowerShell or manual Bridge registry editing.
 2. Open `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select `%LOCALAPPDATA%\Programs\Translator\extension`.
 3. On upgrade, run the new installer, then reload Translator on `chrome://extensions` or fully restart Chrome.
 4. Start Translator from the desktop shortcut. Use `Ctrl+Alt+A` or **Select screen region** to capture, recognize, and translate.

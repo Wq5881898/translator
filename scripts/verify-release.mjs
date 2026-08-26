@@ -27,6 +27,7 @@ if (JSON.stringify(actualPermissions) !== JSON.stringify([...expectedPermissions
 const expectedHosts = [
   'https://api.cognitive.microsofttranslator.com/*',
   'https://api.dictionaryapi.dev/*',
+  'https://api.datamuse.com/*',
 ];
 const actualHosts = [...(manifest.host_permissions ?? [])].sort();
 

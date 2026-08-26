@@ -12,6 +12,7 @@ export type TranslationResult = {
   textKind: TextKind;
   provider: string;
   phonetic?: string;
+  partsOfSpeech?: string[];
   alternatives?: string[];
 };
 

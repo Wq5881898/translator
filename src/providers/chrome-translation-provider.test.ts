@@ -66,6 +66,9 @@ describe('ChromeTranslationProvider', () => {
 
   it('uses a dictionary headword and definitions for an inflected ambiguous word', async () => {
     const translate = vi.fn(async (text: string) => {
+      if (text.includes('\n')) {
+        return '授予；批准\n给予或准予，尤其是回应请求\n承认某事属实';
+      }
       const translations: Record<string, string> = {
         grant: '授予；批准',
         'To give or confer, with or without compensation, particularly in answer to prayer or request.':
@@ -123,15 +126,18 @@ describe('ChromeTranslationProvider', () => {
       '授予；批准；给予或准予，尤其是回应请求；承认某事属实',
     );
     expect(result.alternatives).toEqual([
-      '授予；批准',
+      '授予',
+      '批准',
       '给予或准予，尤其是回应请求',
       '承认某事属实',
     ]);
     expect(result.phonetic).toBe('/ˈɡrɑːntɪd/');
+    expect(result.partsOfSpeech).toEqual(['verb']);
     expect(translate).not.toHaveBeenCalledWith('granted');
+    expect(translate).toHaveBeenCalledOnce();
   });
 
-  it('translates dictionary senses serially on a single Chrome session', async () => {
+  it('translates a headword and its dictionary senses in one local-model call', async () => {
     let activeTranslations = 0;
     let maximumConcurrency = 0;
     const translate = vi.fn(async (text: string) => {
@@ -168,7 +174,10 @@ describe('ChromeTranslationProvider', () => {
     });
 
     expect(maximumConcurrency).toBe(1);
-    expect(translate).toHaveBeenCalledTimes(3);
+    expect(translate).toHaveBeenCalledOnce();
+    expect(translate).toHaveBeenCalledWith(
+      'whoosh\nTo move swiftly with a rushing sound.\nA sudden rushing sound.',
+    );
   });
 
   it('destroys a failed session and retries once with a fresh session', async () => {
@@ -311,7 +320,7 @@ describe('ChromeTranslationProvider', () => {
       targetLanguage: 'zh-CN',
     });
     expect(repeated.translatedText).toBe(result.translatedText);
-    expect(dictionaryFetcher).toHaveBeenCalledTimes(3);
+    expect(dictionaryFetcher).toHaveBeenCalledTimes(6);
   });
 });
 

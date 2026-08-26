@@ -54,7 +54,12 @@ describe('free dictionary phonetics', () => {
 
     const result = await fetchEnglishDictionaryLookup('During', fetcher);
 
-    expect(result).toEqual({ headword: 'during', phonetic: '/ˈdjʊərɪŋ/', definitions: ['Throughout the course of.'] });
+    expect(result).toEqual({
+      headword: 'during',
+      phonetic: '/ˈdjʊərɪŋ/',
+      definitions: ['Throughout the course of.'],
+      senses: [{ definition: 'Throughout the course of.' }],
+    });
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
@@ -81,20 +86,48 @@ describe('free dictionary phonetics', () => {
 
     const result = await fetchEnglishDictionaryLookup('proud', fetcher);
 
-    expect(result).toEqual({ headword: 'proud', phonetic: '/praʊd/', definitions: ['Feeling deep pleasure or satisfaction.', 'Having a high opinion of oneself.'] });
+    expect(result).toMatchObject({
+      headword: 'proud',
+      phonetic: '/praʊd/',
+      definitions: ['Feeling deep pleasure or satisfaction.', 'Having a high opinion of oneself.'],
+    });
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
-  it('recovers within one lookup when the first two network attempts fail', async () => {
+  it('stops after one quick retry so a failed dictionary cannot block translation', async () => {
     const fetcher = vi.fn()
       .mockRejectedValueOnce(new TypeError('first transient failure'))
       .mockRejectedValueOnce(new TypeError('second transient failure'))
       .mockResolvedValueOnce(new Response(JSON.stringify([{ word: 'crouch', phonetic: '/kɹaʊt͡ʃ/', meanings: [{ definitions: [{ definition: 'To bend low.' }] }] }])));
 
-    const result = await fetchEnglishDictionaryLookup('crouch', fetcher);
-
-    expect(result?.phonetic).toBe('/kraʊtʃ/');
-    expect(result?.definitions).toEqual(['To bend low.']);
+    await expect(fetchEnglishDictionaryLookup('crouch', fetcher)).rejects.toThrow(
+      'first transient failure',
+    );
     expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
+  it('uses Datamuse IPA, parts of speech, and definitions when the primary dictionary fails', async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      if (url.includes('dictionaryapi.dev')) {
+        throw new TypeError('primary unavailable');
+      }
+      return new Response(JSON.stringify([{
+        word: 'baby',
+        tags: ['n', 'v', 'pron:/ˈbeɪbi/'],
+        defs: ['n\ta very young child', 'v\tto treat someone as a baby'],
+      }]));
+    });
+
+    const result = await fetchEnglishDictionaryLookup('baby', fetcher);
+
+    expect(result).toEqual({
+      headword: 'baby',
+      phonetic: '/ˈbeɪbi/',
+      definitions: ['a very young child', 'to treat someone as a baby'],
+      senses: [
+        { partOfSpeech: 'noun', definition: 'a very young child' },
+        { partOfSpeech: 'verb', definition: 'to treat someone as a baby' },
+      ],
+    });
   });
 });

@@ -1,5 +1,5 @@
 #define MyAppName "Translator"
-#define MyAppVersion "1.1.6"
+#define MyAppVersion "1.1.7"
 #define MyAppPublisher "Wq5881898"
 
 [Setup]
@@ -11,7 +11,7 @@ DefaultDirName={%LOCALAPPDATA}\Programs\Translator
 DefaultGroupName=Translator
 DisableProgramGroupPage=yes
 OutputDir=..\installer-output
-OutputBaseFilename=Translator-Setup-v1.1.6
+OutputBaseFilename=Translator-Setup-v1.1.7
 Compression=lzma2/max
 SolidCompression=yes
 PrivilegesRequired=lowest
@@ -26,7 +26,7 @@ Source: "..\staging\bridge-host\*"; DestDir: "{app}\bridge-host"; Flags: ignorev
 Source: "..\staging\extension\*"; DestDir: "{app}\extension"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\staging\BATCH_E_TEST_GUIDE_ZH.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "..\staging\STAGE2_DESIGN_ZH.md"; DestDir: "{app}\docs"; Flags: ignoreversion
-Source: "..\staging\TEST_REPORT_V1.1.6_FINAL_ZH.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "..\staging\TEST_REPORT_V1.1.7_FINAL_ZH.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "..\staging\STAGE2_FINAL_USER_GUIDE_ZH.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "INSTALL_AFTER_SETUP_ZH.txt"; DestDir: "{app}"; Flags: ignoreversion
 

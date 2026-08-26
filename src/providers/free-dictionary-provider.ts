@@ -8,12 +8,23 @@ type DictionaryEntry = {
   }>;
 };
 
+type DatamuseEntry = {
+  word?: string;
+  defHeadword?: string;
+  tags?: string[];
+  defs?: string[];
+};
+
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 export type EnglishDictionaryLookup = {
   headword: string;
   phonetic?: string;
   definitions: string[];
+  senses: Array<{
+    partOfSpeech?: string;
+    definition: string;
+  }>;
 };
 
 function lemmaCandidates(word: string): string[] {
@@ -50,23 +61,23 @@ async function fetchEntries(
   fetcher: FetchLike,
 ): Promise<DictionaryEntry[] | undefined> {
   const url = `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`;
-  let lastError: unknown;
-
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  let firstError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       const response = await fetcher(url);
       if (!response.ok) return undefined;
       const entries = (await response.json()) as DictionaryEntry[];
       return entries.length ? entries : undefined;
     } catch (error) {
-      lastError = error;
-      if (attempt < 2) {
-        await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 150 : 450));
+      firstError ??= error;
+      if (attempt === 0) {
+        // One immediate retry absorbs brief network hand-offs without adding
+        // the 600 ms fixed backoff used by the previous implementation.
+        await new Promise((resolve) => setTimeout(resolve, 50));
       }
     }
   }
-
-  throw lastError;
+  throw firstError;
 }
 
 function phoneticFrom(entries?: DictionaryEntry[]): string | undefined {
@@ -113,29 +124,86 @@ export function normalizePhonetic(value?: string): string | undefined {
   return normalized;
 }
 
-function definitionsFrom(entries?: DictionaryEntry[]): string[] {
-  const definitions: string[] = [];
+function sensesFrom(entries?: DictionaryEntry[]): EnglishDictionaryLookup['senses'] {
+  const senses: EnglishDictionaryLookup['senses'] = [];
   for (const meaning of entries?.[0]?.meanings ?? []) {
     const definition = meaning.definitions?.find((item) => item.definition)?.definition?.trim();
-    if (definition && !definitions.includes(definition)) definitions.push(definition);
-    if (definitions.length === 2) break;
+    if (definition && !senses.some((sense) => sense.definition === definition)) {
+      senses.push({
+        ...(meaning.partOfSpeech?.trim()
+          ? { partOfSpeech: meaning.partOfSpeech.trim() }
+          : {}),
+        definition,
+      });
+    }
+    if (senses.length === 3) break;
   }
-  return definitions;
+  return senses;
 }
 
-export async function fetchEnglishDictionaryLookup(
+function definitionsFrom(entries?: DictionaryEntry[]): string[] {
+  return sensesFrom(entries).map((sense) => sense.definition);
+}
+
+const DATAMUSE_PARTS_OF_SPEECH: Record<string, string> = {
+  n: 'noun',
+  v: 'verb',
+  adj: 'adjective',
+  adv: 'adverb',
+};
+
+async function fetchDatamuseLookup(
   word: string,
-  fetcher: FetchLike = fetch,
+  fetcher: FetchLike,
 ): Promise<EnglishDictionaryLookup | undefined> {
-  const normalized = word.trim().toLocaleLowerCase('en');
+  const url =
+    `https://api.datamuse.com/words?sp=${encodeURIComponent(word)}` +
+    '&qe=sp&md=dpr&ipa=1&max=1';
+  const response = await fetcher(url);
+  if (!response.ok) return undefined;
+  const entry = ((await response.json()) as DatamuseEntry[])[0];
+  if (!entry?.word || entry.word.toLocaleLowerCase('en') !== word) return undefined;
+
+  const tags = entry.tags ?? [];
+  const phoneticTag = tags.find((tag) => tag.startsWith('pron:'));
+  const taggedParts = tags
+    .map((tag) => DATAMUSE_PARTS_OF_SPEECH[tag])
+    .filter((value): value is string => Boolean(value));
+  const senses: EnglishDictionaryLookup['senses'] = [];
+  for (const rawDefinition of entry.defs ?? []) {
+    const separator = rawDefinition.indexOf('\t');
+    const code = separator >= 0 ? rawDefinition.slice(0, separator) : '';
+    const definition = (separator >= 0
+      ? rawDefinition.slice(separator + 1)
+      : rawDefinition).trim();
+    if (!definition || senses.some((sense) => sense.definition === definition)) continue;
+    senses.push({
+      ...(DATAMUSE_PARTS_OF_SPEECH[code] || taggedParts[0]
+        ? { partOfSpeech: DATAMUSE_PARTS_OF_SPEECH[code] ?? taggedParts[0] }
+        : {}),
+      definition,
+    });
+    if (senses.length === 3) break;
+  }
+
+  const phonetic = normalizePhonetic(phoneticTag?.slice('pron:'.length));
+  if (!phonetic && senses.length === 0 && taggedParts.length === 0) return undefined;
+  return {
+    headword: entry.defHeadword?.trim() || entry.word,
+    ...(phonetic ? { phonetic } : {}),
+    definitions: senses.map((sense) => sense.definition),
+    senses,
+  };
+}
+
+async function fetchPrimaryLookup(
+  normalized: string,
+  fetcher: FetchLike,
+): Promise<EnglishDictionaryLookup | undefined> {
   const originalEntries = await fetchEntries(normalized, fetcher);
   let preferredEntries = originalEntries;
   let headword = originalEntries?.[0]?.word?.trim() || normalized;
 
-  // A real entry for the selected word is authoritative. Earlier versions
-  // always tried guessed lemmas, which turned "during" into the unrelated
-  // dictionary headword "dur". Only fall back to inflection guesses when the
-  // original lookup is absent or contains no usable definitions.
   if (!originalEntries || definitionsFrom(originalEntries).length === 0) {
     for (const candidate of lemmaCandidates(normalized)) {
       const candidateEntries = await fetchEntries(candidate, fetcher);
@@ -148,13 +216,68 @@ export async function fetchEnglishDictionaryLookup(
   }
 
   if (!preferredEntries) return undefined;
+  const senses = sensesFrom(preferredEntries);
   return {
     headword,
     ...(phoneticFrom(originalEntries) || phoneticFrom(preferredEntries)
       ? { phonetic: phoneticFrom(originalEntries) || phoneticFrom(preferredEntries) }
       : {}),
-    definitions: definitionsFrom(preferredEntries),
+    definitions: senses.map((sense) => sense.definition),
+    senses,
   };
+}
+
+export async function fetchEnglishDictionaryLookup(
+  word: string,
+  fetcher: FetchLike = fetch,
+): Promise<EnglishDictionaryLookup | undefined> {
+  const normalized = word.trim().toLocaleLowerCase('en');
+  let backupStarted = false;
+  let backupTimer: ReturnType<typeof setTimeout> | undefined;
+
+  return await new Promise((resolve, reject) => {
+    let finished = false;
+    let pending = 1;
+    let lastError: unknown;
+    const complete = (result?: EnglishDictionaryLookup) => {
+      if (finished || !result) return false;
+      finished = true;
+      if (backupTimer) clearTimeout(backupTimer);
+      resolve(result);
+      return true;
+    };
+    const finishAttempt = (error?: unknown) => {
+      if (error) lastError = error;
+      pending -= 1;
+      if (!finished && pending === 0) {
+        finished = true;
+        if (lastError) reject(lastError);
+        else resolve(undefined);
+      }
+    };
+    const startBackup = () => {
+      if (finished || backupStarted) return;
+      backupStarted = true;
+      pending += 1;
+      void fetchDatamuseLookup(normalized, fetcher).then(
+        (result) => { if (!complete(result)) finishAttempt(); },
+        (error) => finishAttempt(error),
+      );
+    };
+
+    backupTimer = setTimeout(startBackup, 250);
+    void fetchPrimaryLookup(normalized, fetcher).then(
+      (result) => {
+        if (complete(result)) return;
+        startBackup();
+        finishAttempt();
+      },
+      (error) => {
+        startBackup();
+        finishAttempt(error);
+      },
+    );
+  });
 }
 
 export async function fetchEnglishPhonetic(

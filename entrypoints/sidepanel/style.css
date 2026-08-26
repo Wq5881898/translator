@@ -98,6 +98,13 @@ h1 {
   font-weight: 700;
 }
 
+.part-of-speech {
+  color: #52635a;
+  font-size: 15px;
+  font-style: italic;
+  font-weight: 600;
+}
+
 .result {
   border-top: 1px solid #e7ede8;
   padding-top: 16px;

@@ -513,6 +513,11 @@ export function App() {
             {latest.translation.phonetic ? (
               <p className="phonetic">{latest.translation.phonetic}</p>
             ) : null}
+            {latest.translation.partsOfSpeech?.length ? (
+              <p className="part-of-speech">
+                Part of speech: {latest.translation.partsOfSpeech.join(', ')}
+              </p>
+            ) : null}
             <button
               className="speech-button secondary"
               type="button"
