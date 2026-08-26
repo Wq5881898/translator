@@ -47,7 +47,9 @@ export function createChromeTranslationProvider(
 ): TranslationProvider {
   let sessionPromise: Promise<BuiltInTranslatorSession> | undefined;
   let translationQueue: Promise<void> = Promise.resolve();
+  let latestQueuedRequest = 0;
   const dictionaryCache = new Map<string, Promise<Awaited<ReturnType<typeof fetchEnglishDictionaryLookup>>>>();
+  const dictionaryRetryAfter = new Map<string, number>();
 
   function lookupWord(text: string) {
     const cacheKey = text.trim().toLocaleLowerCase('en');
@@ -74,6 +76,10 @@ export function createChromeTranslationProvider(
   }
 
   async function getSession(): Promise<BuiltInTranslatorSession> {
+    // Reuse the live local model immediately. Asking Chrome for availability
+    // before every word can itself stall while the component service wakes.
+    if (sessionPromise) return sessionPromise;
+
     const api = suppliedApi ?? defaultApi();
 
     if (!api) {
@@ -164,18 +170,29 @@ export function createChromeTranslationProvider(
     let dictionaryUnavailable = false;
     let dictionaryResult: Awaited<ReturnType<typeof fetchEnglishDictionaryLookup>>;
     if (textKind === "word") {
-      try {
-        dictionaryResult = await withTimeout(
-          lookupWord(text),
-          8_000,
-          "Dictionary lookup timed out.",
-        );
-      } catch (error) {
+      const dictionaryKey = text.toLocaleLowerCase('en');
+      if ((dictionaryRetryAfter.get(dictionaryKey) ?? 0) > Date.now()) {
         dictionaryUnavailable = true;
-        console.warn(
-          "[chrome-translation] Dictionary unavailable; using basic local translation.",
-          { error: error instanceof Error ? error.message : String(error) },
-        );
+      } else {
+        try {
+          dictionaryResult = await withTimeout(
+            lookupWord(text),
+            3_000,
+            "Dictionary lookup timed out.",
+          );
+          dictionaryRetryAfter.delete(dictionaryKey);
+        } catch (error) {
+          dictionaryUnavailable = true;
+          dictionaryCache.delete(dictionaryKey);
+          // Do not let repeated clicks alternate between a fast basic result
+          // and a late dictionary result. Retry the dictionary after a short
+          // cooldown while local Chrome translation remains immediately usable.
+          dictionaryRetryAfter.set(dictionaryKey, Date.now() + 5 * 60_000);
+          console.warn(
+            "[chrome-translation] Dictionary unavailable; using basic local translation.",
+            { error: error instanceof Error ? error.message : String(error) },
+          );
+        }
       }
     }
     const translationInputs = dictionaryResult
@@ -212,9 +229,13 @@ export function createChromeTranslationProvider(
 
   return {
     translate(request: TranslationRequest): Promise<TranslationResult> {
-      const operation = translationQueue.then(() =>
-        performTranslation(request),
-      );
+      const queuedRequest = ++latestQueuedRequest;
+      const operation = translationQueue.then(() => {
+        if (queuedRequest !== latestQueuedRequest) {
+          throw new Error('Translation was replaced by a newer selection.');
+        }
+        return performTranslation(request);
+      });
       translationQueue = operation.then(
         () => undefined,
         () => undefined,

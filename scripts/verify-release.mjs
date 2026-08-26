@@ -16,6 +16,7 @@ const requiredFiles = [
 await Promise.all(requiredFiles.map((path) => access(path)));
 
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+const packageMetadata = JSON.parse(await readFile('package.json', 'utf8'));
 const expectedPermissions = ['contextMenus', 'sidePanel', 'storage', 'nativeMessaging', 'offscreen'];
 const actualPermissions = [...(manifest.permissions ?? [])].sort();
 
@@ -33,7 +34,7 @@ if (JSON.stringify(actualHosts) !== JSON.stringify([...expectedHosts].sort())) {
   throw new Error(`Unexpected host permissions: ${actualHosts.join(', ')}`);
 }
 
-if (manifest.version !== '1.1.5') {
+if (manifest.version !== packageMetadata.version) {
   throw new Error(`Unexpected release version: ${manifest.version}`);
 }
 

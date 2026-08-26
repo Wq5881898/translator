@@ -221,12 +221,40 @@ describe('ChromeTranslationProvider', () => {
     const dictionaryFetcher = vi.fn(async () => new Response('', { status: 404 }));
     const provider = createChromeTranslationProvider(translatorApi, dictionaryFetcher);
 
-    await Promise.all([
-      provider.translate({ text: 'baby', sourceLanguage: 'en', targetLanguage: 'zh-CN' }),
-      provider.translate({ text: 'hello', sourceLanguage: 'en', targetLanguage: 'zh-CN' }),
-    ]);
+    const first = provider.translate({ text: 'baby', sourceLanguage: 'en', targetLanguage: 'zh-CN' });
+    await vi.waitFor(() => expect(translate).toHaveBeenCalledWith('baby'));
+    const second = provider.translate({ text: 'hello', sourceLanguage: 'en', targetLanguage: 'zh-CN' });
+    await Promise.all([first, second]);
 
     expect(maximumConcurrency).toBe(1);
+  });
+
+  it('drops stale queued selections instead of making the newest word wait for all of them', async () => {
+    let releaseFirst: (() => void) | undefined;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const translate = vi.fn(async (text: string) => {
+      if (text === 'first') await firstGate;
+      return `zh:${text}`;
+    });
+    const translatorApi: BuiltInTranslatorApi = {
+      availability: vi.fn(async () => 'available' as const),
+      create: vi.fn(async () => ({ translate })),
+    };
+    const dictionaryFetcher = vi.fn(async () => new Response('', { status: 404 }));
+    const provider = createChromeTranslationProvider(translatorApi, dictionaryFetcher);
+
+    const first = provider.translate({ text: 'first', sourceLanguage: 'en', targetLanguage: 'zh-CN' });
+    await vi.waitFor(() => expect(translate).toHaveBeenCalledWith('first'));
+    const stale = provider.translate({ text: 'second', sourceLanguage: 'en', targetLanguage: 'zh-CN' });
+    const newest = provider.translate({ text: 'third', sourceLanguage: 'en', targetLanguage: 'zh-CN' });
+    releaseFirst?.();
+
+    await expect(first).resolves.toMatchObject({ translatedText: 'zh:first' });
+    await expect(stale).rejects.toThrow('replaced by a newer selection');
+    await expect(newest).resolves.toMatchObject({ translatedText: 'zh:third' });
+    expect(translate).not.toHaveBeenCalledWith('second');
   });
 
   it('caches a complete dictionary result so repeated manual clicks stay identical', async () => {
@@ -250,6 +278,7 @@ describe('ChromeTranslationProvider', () => {
 
     expect(second).toMatchObject({ translatedText: first.translatedText, phonetic: first.phonetic });
     expect(dictionaryFetcher).toHaveBeenCalledOnce();
+    expect(translatorApi.availability).toHaveBeenCalledOnce();
   });
 
   it('falls back to basic Chrome translation when the online dictionary fails', async () => {
@@ -274,6 +303,14 @@ describe('ChromeTranslationProvider', () => {
       provider: 'chrome-local-dictionary-fallback',
     });
     expect(result.phonetic).toBeUndefined();
+    expect(dictionaryFetcher).toHaveBeenCalledTimes(3);
+
+    const repeated = await provider.translate({
+      text: 'baby',
+      sourceLanguage: 'en',
+      targetLanguage: 'zh-CN',
+    });
+    expect(repeated.translatedText).toBe(result.translatedText);
     expect(dictionaryFetcher).toHaveBeenCalledTimes(3);
   });
 });

@@ -6,6 +6,7 @@ import {
   shouldRecreateOffscreenDocument,
   STAGE2_PROTOCOL_VERSION,
 } from './stage2-bridge';
+import { stage2WorkerReconnectDelay } from './stage2-translation-worker';
 
 describe('Stage 2 bridge contract', () => {
   it('creates a versioned request with a stable request ID', () => {
@@ -29,5 +30,11 @@ describe('Stage 2 bridge contract', () => {
     expect(shouldRecreateOffscreenDocument(true, false)).toBe(true);
     expect(shouldRecreateOffscreenDocument(true, true)).toBe(false);
     expect(shouldRecreateOffscreenDocument(false, false)).toBe(false);
+  });
+
+  it('reconnects a live translation page quickly without spinning forever', () => {
+    expect(stage2WorkerReconnectDelay(0)).toBe(250);
+    expect(stage2WorkerReconnectDelay(1)).toBe(500);
+    expect(stage2WorkerReconnectDelay(8)).toBe(2_000);
   });
 });
