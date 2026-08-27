@@ -21,4 +21,6 @@
 
 ## 安装回归
 
-安装器编译后验证静默安装、程序文件、扩展 manifest、Native Messaging 32/64 位注册表路径和版本号。最终安装包 SHA-256 随交付结果记录。
+本机实际静默安装回归通过：安装器退出码 0；扩展 manifest 为 `1.1.8`；Windows 文件版本为 `1.1.8.0`；Desktop 与 Bridge Host 文件存在；Native Messaging 的 Registry32、Registry64 注册均指向存在的 manifest。启动安装后的 Windows 程序并观察 5 秒，进程保持运行，随后正常关闭。
+
+最终安装包的 SHA-256 在交付信息中单独记录，避免安装包内文档包含自身哈希而造成循环变化。
