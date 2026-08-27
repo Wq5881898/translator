@@ -20,6 +20,7 @@
 
         <StackPanel>
             <TextBlock FontSize="28" FontWeight="Bold" Text="Translator"/>
+            <TextBlock x:Name="VersionText" Margin="0,3,0,0" Foreground="#52635A"/>
             <TextBlock x:Name="ShortcutHint" Margin="0,6,0,0" Foreground="#52635A"
                        TextWrapping="Wrap"/>
         </StackPanel>
@@ -67,9 +68,6 @@
                     <TextBlock FontWeight="SemiBold" Text="Chinese"/>
                     <TextBlock x:Name="PhoneticText" Margin="12,0,0,0" Foreground="#52635A"
                                FontFamily="Segoe UI" FontSize="17" VerticalAlignment="Center"/>
-                    <TextBlock x:Name="PartOfSpeechText" Margin="12,0,0,0" Foreground="#52635A"
-                               FontFamily="Segoe UI" FontSize="15" FontStyle="Italic"
-                               VerticalAlignment="Center"/>
                 </StackPanel>
             </DockPanel>
             <TextBox x:Name="TranslatedText" Grid.Row="3" Margin="0,7,0,0"

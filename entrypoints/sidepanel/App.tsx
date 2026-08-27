@@ -466,7 +466,7 @@ export function App() {
 
   return (
     <main className="panel">
-            <p className="eyebrow">Stage 1 release candidate</p>
+      <p className="eyebrow">Version {browser.runtime.getManifest().version}</p>
       <h1>Translator</h1>
       <p className="intro">
         Translate locally, then keep useful words and sentences in this browser.
@@ -512,11 +512,6 @@ export function App() {
             <p lang="en">{latest.selection.text}</p>
             {latest.translation.phonetic ? (
               <p className="phonetic">{latest.translation.phonetic}</p>
-            ) : null}
-            {latest.translation.partsOfSpeech?.length ? (
-              <p className="part-of-speech">
-                Part of speech: {latest.translation.partsOfSpeech.join(', ')}
-              </p>
             ) : null}
             <button
               className="speech-button secondary"

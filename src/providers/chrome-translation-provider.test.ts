@@ -67,7 +67,7 @@ describe('ChromeTranslationProvider', () => {
   it('uses a dictionary headword and definitions for an inflected ambiguous word', async () => {
     const translate = vi.fn(async (text: string) => {
       if (text.includes('\n')) {
-        return '授予；批准\n给予或准予，尤其是回应请求\n承认某事属实';
+        return '[0] 授予；批准\n[1] 给予或准予，尤其是回应请求\n[2] 承认某事属实';
       }
       const translations: Record<string, string> = {
         grant: '授予；批准',
@@ -123,14 +123,9 @@ describe('ChromeTranslationProvider', () => {
     });
 
     expect(result.translatedText).toBe(
-      '授予；批准；给予或准予，尤其是回应请求；承认某事属实',
+      'verb：授予；批准；给予或准予，尤其是回应请求；承认某事属实',
     );
-    expect(result.alternatives).toEqual([
-      '授予',
-      '批准',
-      '给予或准予，尤其是回应请求',
-      '承认某事属实',
-    ]);
+    expect(result.meanings).toEqual([{ partOfSpeech: 'verb', translatedText: '授予；批准；给予或准予，尤其是回应请求；承认某事属实' }]);
     expect(result.phonetic).toBe('/ˈɡrɑːntɪd/');
     expect(result.partsOfSpeech).toEqual(['verb']);
     expect(translate).not.toHaveBeenCalledWith('granted');
@@ -176,8 +171,37 @@ describe('ChromeTranslationProvider', () => {
     expect(maximumConcurrency).toBe(1);
     expect(translate).toHaveBeenCalledOnce();
     expect(translate).toHaveBeenCalledWith(
-      'whoosh\nTo move swiftly with a rushing sound.\nA sudden rushing sound.',
+      '[0] whoosh\n[1] To move swiftly with a rushing sound.\n[2] A sudden rushing sound.',
     );
+  });
+
+  it('binds each part of speech to its own translated meaning', async () => {
+    const translate = vi.fn(async () =>
+      '[0] 地址；处理\n[1] 某人居住的地点\n[2] 处理或应对某个问题',
+    );
+    const translatorApi: BuiltInTranslatorApi = {
+      availability: vi.fn(async () => 'available' as const),
+      create: vi.fn(async () => ({ translate })),
+    };
+    const dictionaryFetcher = vi.fn(async () => new Response(JSON.stringify([{
+      word: 'address',
+      phonetic: '/əˈdrɛs/',
+      meanings: [
+        { partOfSpeech: 'noun', definitions: [{ definition: 'The place where someone lives.' }] },
+        { partOfSpeech: 'verb', definitions: [{ definition: 'To deal with a problem.' }] },
+      ],
+    }])));
+    const provider = createChromeTranslationProvider(translatorApi, dictionaryFetcher);
+
+    const result = await provider.translate({ text: 'address', sourceLanguage: 'en', targetLanguage: 'zh-CN' });
+
+    expect(result.translatedText).toBe(
+      'noun：某人居住的地点\nverb：处理或应对某个问题',
+    );
+    expect(result.meanings).toEqual([
+      { partOfSpeech: 'noun', translatedText: '某人居住的地点' },
+      { partOfSpeech: 'verb', translatedText: '处理或应对某个问题' },
+    ]);
   });
 
   it('destroys a failed session and retries once with a fresh session', async () => {

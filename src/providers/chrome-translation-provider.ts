@@ -190,19 +190,46 @@ export function createChromeTranslationProvider(
     // local Translator API and make the result readable even if punctuation
     // is normalized by the model.
     const translationInputs = dictionaryResult?.definitions.length
-      ? [[dictionaryResult.headword, ...dictionaryResult.definitions].join('\n')]
+      ? [[dictionaryResult.headword, ...dictionaryResult.definitions]
+          .map((value, index) => `[${index}] ${value}`)
+          .join('\n')]
       : [text];
     const translatedSenses =
       await translateWithFreshSessionRetry(translationInputs);
-    const alternatives = translatedSenses
-      .flatMap((value) => value.split(/\r?\n|；/u))
+    const combinedTranslation = translatedSenses[0] ?? '';
+    const indexedTranslations = new Map<number, string>();
+    for (const line of combinedTranslation.split(/\r?\n/u)) {
+      const match = /^\s*\[(\d+)\]\s*(.+)$/u.exec(line);
+      if (match) indexedTranslations.set(Number(match[1]!), match[2]!.trim());
+    }
+    const alternatives = combinedTranslation
+      .split(/\r?\n|；/u)
       .map((value) => value.trim().replace(/^\d+[.)、:]\s*/u, ''))
       .filter(
         (value, index, values) =>
           value.length > 0 && values.indexOf(value) === index,
       )
       .slice(0, 4);
-    const normalizedTranslation = alternatives.join("；");
+    const directTranslation = indexedTranslations.get(0);
+    const groupedMeanings = new Map<string, string[]>();
+    dictionaryResult?.senses.forEach((sense, index) => {
+      const translated = indexedTranslations.get(index + 1);
+      if (!translated) return;
+      const partOfSpeech = sense.partOfSpeech || 'meaning';
+      const values = groupedMeanings.get(partOfSpeech) ?? [];
+      if (!values.includes(translated)) values.push(translated);
+      groupedMeanings.set(partOfSpeech, values);
+    });
+    const meanings = [...groupedMeanings].map(([partOfSpeech, values], index) => ({
+      partOfSpeech,
+      translatedText: [groupedMeanings.size === 1 && index === 0 ? directTranslation : undefined, ...values]
+        .filter((value): value is string => Boolean(value))
+        .filter((value, valueIndex, all) => all.indexOf(value) === valueIndex)
+        .join('；'),
+    })).filter((meaning) => meaning.translatedText);
+    const normalizedTranslation = meanings.length
+      ? meanings.map((meaning) => `${meaning.partOfSpeech}：${meaning.translatedText}`).join('\n')
+      : alternatives.join("；");
 
     if (!normalizedTranslation) {
       throw new Error("Chrome returned an empty translation. Try again.");
@@ -227,6 +254,7 @@ export function createChromeTranslationProvider(
             )],
           }
         : {}),
+      ...(meanings.length ? { meanings } : {}),
       ...(alternatives.length > 1 ? { alternatives } : {}),
     };
   }

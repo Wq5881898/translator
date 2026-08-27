@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { fetchEnglishDictionaryLookup, normalizePhonetic } from './free-dictionary-provider';
+import { convertArpabetToIpa, fetchEnglishDictionaryLookup, normalizePhonetic } from './free-dictionary-provider';
 
 describe('free dictionary phonetics', () => {
   it('renders the consultation phonetic without a missing combining glyph', async () => {
@@ -44,6 +44,25 @@ describe('free dictionary phonetics', () => {
     expect(normalizePhonetic('/pɹaʊd/')).toBe('/praʊd/');
     expect(normalizePhonetic('/kɹaʊt͡ʃ/')).toBe('/kraʊtʃ/');
     expect(normalizePhonetic('/d͜ʒʌdʒ/')).toBe('/dʒʌdʒ/');
+  });
+
+  it('converts Datamuse ARPAbet into IPA instead of displaying pronunciation codes', () => {
+    expect(convertArpabetToIpa('CH EY1 N JH AH0 Z')).toBe('/ˈtʃeɪndʒəz/');
+    expect(normalizePhonetic('CH EY1 N JH AH0 Z')).toBe('/ˈtʃeɪndʒəz/');
+    expect(normalizePhonetic('CH EY1 UNKNOWN')).toBeUndefined();
+  });
+
+  it('converts ARPAbet returned by the Datamuse fallback for changes', async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      if (url.includes('dictionaryapi.dev')) return new Response('', { status: 404 });
+      return new Response(JSON.stringify([{
+        word: 'changes',
+        tags: ['n', 'pron:CH EY1 N JH AH0 Z'],
+        defs: ['n\tthe act or result of becoming different'],
+      }]));
+    });
+    const result = await fetchEnglishDictionaryLookup('changes', fetcher);
+    expect(result?.phonetic).toBe('/ˈtʃeɪndʒəz/');
   });
 
   it('keeps a valid original entry instead of replacing during with dur', async () => {

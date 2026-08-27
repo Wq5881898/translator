@@ -102,7 +102,9 @@ function phoneticFrom(entries?: DictionaryEntry[]): string | undefined {
  */
 export function normalizePhonetic(value?: string): string | undefined {
   if (!value) return undefined;
-  const normalized = value
+  const arpabet = convertArpabetToIpa(value);
+  if (resemblesArpabet(value) && !arpabet) return undefined;
+  const normalized = (arpabet ?? value)
     .normalize('NFC')
     .replace(/l\u0329/gu, 'əl')
     .replace(/n\u0329/gu, 'ən')
@@ -122,6 +124,57 @@ export function normalizePhonetic(value?: string): string | undefined {
     return undefined;
   }
   return normalized;
+}
+
+const ARPABET_VOWELS: Record<string, string> = {
+  AA: 'ɑ', AE: 'æ', AH: 'ʌ', AO: 'ɔ', AW: 'aʊ', AY: 'aɪ',
+  EH: 'ɛ', ER: 'ɝ', EY: 'eɪ', IH: 'ɪ', IY: 'i', OW: 'oʊ',
+  OY: 'ɔɪ', UH: 'ʊ', UW: 'u',
+};
+
+const ARPABET_CONSONANTS: Record<string, string> = {
+  B: 'b', CH: 'tʃ', D: 'd', DH: 'ð', F: 'f', G: 'ɡ', HH: 'h',
+  JH: 'dʒ', K: 'k', L: 'l', M: 'm', N: 'n', NG: 'ŋ', P: 'p',
+  R: 'r', S: 's', SH: 'ʃ', T: 't', TH: 'θ', V: 'v', W: 'w',
+  Y: 'j', Z: 'z', ZH: 'ʒ',
+};
+
+function looksLikeArpabet(value: string): boolean {
+  const unwrapped = value.trim().replace(/^[/[]|[\]/]$/gu, '');
+  const tokens = unwrapped.split(/\s+/u);
+  return tokens.length > 1 && tokens.every((token) => /^[A-Z]{1,3}[012]?$/u.test(token));
+}
+
+function resemblesArpabet(value: string): boolean {
+  const tokens = value.trim().replace(/^[/[]|[\]/]$/gu, '').split(/\s+/u);
+  return tokens.length > 1 && tokens.every((token) => /^[A-Z]+[012]?$/u.test(token));
+}
+
+/** Converts Datamuse/CMU ARPAbet into learner-friendly IPA. */
+export function convertArpabetToIpa(value: string): string | undefined {
+  if (!looksLikeArpabet(value)) return undefined;
+  const tokens = value.trim().replace(/^[/[]|[\]/]$/gu, '').split(/\s+/u);
+  let output = '';
+  let pendingConsonants = '';
+  for (const token of tokens) {
+    const match = /^([A-Z]{1,3})([012]?)$/u.exec(token);
+    if (!match) return undefined;
+    const symbol = match[1]!;
+    const stress = match[2] ?? '';
+    const consonant = ARPABET_CONSONANTS[symbol];
+    if (consonant) {
+      pendingConsonants += consonant;
+      continue;
+    }
+    let vowel = ARPABET_VOWELS[symbol];
+    if (!vowel) return undefined;
+    if (symbol === 'AH' && stress === '0') vowel = 'ə';
+    if (symbol === 'ER' && stress === '0') vowel = 'ər';
+    output += `${stress === '1' ? 'ˈ' : stress === '2' ? 'ˌ' : ''}${pendingConsonants}${vowel}`;
+    pendingConsonants = '';
+  }
+  output += pendingConsonants;
+  return output ? `/${output}/` : undefined;
 }
 
 function sensesFrom(entries?: DictionaryEntry[]): EnglishDictionaryLookup['senses'] {

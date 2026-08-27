@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.8 — 2026-08-27
+
+- Convert Datamuse/CMU ARPAbet pronunciation codes to validated learner-facing IPA and reject unparseable codes.
+- Bind each part of speech to its corresponding translated dictionary meanings instead of showing a detached label.
+- Display the actual installed version in both the Chrome extension and Windows application.
+- Add regression coverage for `changes` (`CH EY1 N JH AH0 Z` → `/ˈtʃeɪndʒəz/`) and noun/verb meaning grouping.
+
 ## 1.1.5 — 2026-08-25
 
 - Rebuilds an orphaned Chrome offscreen translation page when its runtime port has disappeared.

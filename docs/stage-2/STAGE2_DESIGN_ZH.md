@@ -394,3 +394,11 @@ v1.1.6 的五分钟词典冷却会把一次瞬时故障放大为持续缺少音�
 词典采用延迟备用策略。`dictionaryapi.dev` 为主来源；若主请求约 250ms 内未完成或失败，才启动 Datamuse。备用来源请求 `dpr` 元数据及 `ipa=1`，获得定义、词性和 IPA。主来源快速成功时不发送备用请求，避免无意义的双倍流量；任何来源先返回完整可用词条即写入会话缓存。两者都失败时，整个增强查询最多等待约 1.2 秒，然后仅降级基础翻译。
 
 `TranslationResult` 新增 `partsOfSpeech: string[]`。免费词典将每条定义保留为 `{ partOfSpeech, definition }`，Provider 去重词性后通过 Stage 2 Bridge JSON 传递；Windows `TranslationResult` 使用 `IReadOnlyList<string>` 接收。浏览器侧边栏在音标下显示词性，Windows 在音标旁显示词性。句子和段落不显示该字段。
+
+### 9.13 v1.1.8 音标格式识别、释义绑定与版本可见性
+
+Datamuse 的 `pron:` 字段并不保证始终返回 IPA；部分词条即使请求 `ipa=1`，仍返回 CMU ARPAbet，例如 `changes` 返回 `CH EY1 N JH AH0 Z`。v1.1.8 在词典数据入口识别 ARPAbet，将音素、重音和非重读元音转换为学习者可读的 IPA（该示例转换为 `/ˈtʃeɪndʒəz/`）。无法完整解析的全大写音素序列直接丢弃，不再作为音标显示；正常 IPA 继续沿用已有 Unicode 兼容规范化。
+
+词性不再作为与释义分离的展示标签。Provider 给合并翻译输入增加稳定编号，按编号将每个中文释义重新绑定到原词典 sense，并按词性分组生成 `noun：……`、`verb：……` 等结果行。`TranslationResult.meanings` 保留结构化 `{ partOfSpeech, translatedText }`，`translatedText` 同时提供已格式化的兼容文本，因此浏览器和 Windows 通过 Bridge 得到一致的“词性 + 释义”内容。
+
+版本号以 `package.json` / WXT manifest 的 `1.1.8` 和 .NET `Directory.Build.props` 的程序集版本为统一发布标识。浏览器侧边栏与设置页读取实际扩展 manifest，Windows 主窗口读取实际程序集版本；界面显示的是当前真正加载的组件版本，而不是手写说明文字。

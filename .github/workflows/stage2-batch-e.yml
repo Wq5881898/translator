@@ -55,7 +55,7 @@ jobs:
           if (-not (Test-Path $iscc)) { throw 'Inno Setup 6 is not available on the Windows runner.' }
           & $iscc installer/Translator.iss
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE." }
-          $setup = Resolve-Path installer-output/Translator-Setup.exe
+          $setup = Resolve-Path installer-output/Translator-Setup-v1.1.8.exe
           $process = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Silent installation failed with exit code $($process.ExitCode)." }
           $installRoot = Join-Path $env:LOCALAPPDATA 'Programs\Translator'
@@ -110,5 +110,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: translator-stage2-installer
-          path: installer-output/Translator-Setup.exe
+          path: installer-output/Translator-Setup-v1.1.8.exe
           if-no-files-found: error

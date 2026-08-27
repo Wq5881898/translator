@@ -1,4 +1,4 @@
-# Translator 第二阶段 v1.1.7 安装使用说明
+# Translator 第二阶段 v1.1.8 安装使用说明
 
 ## 1. 交付内容
 
@@ -6,7 +6,7 @@
 
 ## 2. 安装与升级
 
-1. 运行 `Translator-Setup-v1.1.7.exe`。
+1. 运行 `Translator-Setup-v1.1.8.exe`。
 2. 首次安装后打开 `chrome://extensions`，开启“开发者模式”，点击“加载已解压的扩展程序”。
 3. 选择 `%LOCALAPPDATA%\Programs\Translator\extension`。
 4. 升级后点击 Translator 的“重新加载”，或完全退出并重新启动 Chrome。
@@ -21,7 +21,8 @@ Chrome 的开发者模式扩展必须由用户确认加载，这是浏览器安�
 - 按 `Ctrl+Alt+A` 或点击“Select screen region”，框选网页、PDF、Word、PPT 等画面中的英文。
 - OCR 完成后自动翻译；英文可编辑，修改后点击“Translate Chinese”重新翻译。
 - 英文与中文区域分别提供复制按钮。
-- 单词结果显示经过字体兼容处理的音标、词性和最多三条词典释义；“Read aloud”朗读英文原文。
+- 单词结果显示经过格式识别和字体兼容处理的 IPA；词性跟随对应释义显示（如 `noun：地址`、`verb：处理`）；“Read aloud”朗读英文原文。
+- 插件侧边栏和 Windows 主窗口均显示实际运行版本号，安装后应确认为 `1.1.8`。
 - 爱心按钮收藏当前内容；“Favorites (数量)”打开共享收藏库。
 - 设置按钮可修改截图快捷键和翻译 Provider。
 

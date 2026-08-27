@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        VersionText.Text = $"Version {typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "unknown"}";
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
         Activated += OnActivated;
@@ -208,7 +209,6 @@ public partial class MainWindow : Window
             _currentTranslation = null;
             FavoriteButton.Content = "♡";
             PhoneticText.Text = string.Empty;
-            PartOfSpeechText.Text = string.Empty;
             SpeakButton.IsEnabled = false;
             TranslatedText.Clear();
             if (string.IsNullOrWhiteSpace(RecognizedText.Text))
@@ -234,9 +234,6 @@ public partial class MainWindow : Window
                 CancellationToken.None);
             PhoneticText.Text = result.TextKind == TextKind.Word && !string.IsNullOrWhiteSpace(result.Phonetic)
                 ? result.Phonetic
-                : string.Empty;
-            PartOfSpeechText.Text = result.TextKind == TextKind.Word && result.PartsOfSpeech is { Count: > 0 }
-                ? $"Part of speech: {string.Join(", ", result.PartsOfSpeech)}"
                 : string.Empty;
             TranslatedText.Text = result.TranslatedText;
             _currentTranslation = result;

@@ -103,7 +103,7 @@ export function App() {
 
   return (
     <main>
-      <p className="eyebrow">Stage 1 release candidate</p>
+      <p className="eyebrow">Version {browser.runtime.getManifest().version}</p>
       <h1>Translator settings</h1>
       <p className="intro">
         Pronunciation, settings, and favorites stay in this browser. Translation runs locally in Chrome by default.
