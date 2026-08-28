@@ -53,6 +53,8 @@ jobs:
           Copy-Item desktop/bridge staging/bridge -Recurse
           Copy-Item docs/stage-2/BATCH_E_TEST_GUIDE_ZH.md staging/
           Copy-Item docs/stage-2/STAGE2_DESIGN_ZH.md staging/
+          Copy-Item docs/stage-2/TEST_REPORT_V1.1.8_FINAL_ZH.md staging/
+          Copy-Item docs/stage-2/STAGE2_FINAL_USER_GUIDE_ZH.md staging/
           Copy-Item THIRD_PARTY_NOTICES.md staging/
           Copy-Item .output/chrome-mv3 staging/extension -Recurse
       - name: Build and validate single-file installer
