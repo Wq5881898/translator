@@ -20,20 +20,28 @@
 
         <StackPanel>
             <TextBlock FontSize="28" FontWeight="Bold" Text="Translator"/>
+            <TextBlock x:Name="VersionText" Margin="0,3,0,0" Foreground="#52635A"/>
             <TextBlock x:Name="ShortcutHint" Margin="0,6,0,0" Foreground="#52635A"
                        TextWrapping="Wrap"/>
         </StackPanel>
 
-        <StackPanel Grid.Row="1" Margin="0,20,0,16" Orientation="Horizontal">
+        <WrapPanel Grid.Row="1" Margin="0,20,0,16">
             <Button x:Name="CaptureButton" Click="CaptureButton_Click"
                     Content="Select screen region"/>
             <Button x:Name="TranslateButton" Margin="10,0,0,0"
                     Click="TranslateButton_Click" Content="Translate Chinese"/>
-            <Button x:Name="CopyButton" Margin="10,0,0,0"
-                    Click="CopyButton_Click" Content="Copy Chinese"/>
-            <Button x:Name="SettingsButton" Margin="10,0,0,0"
-                    Click="SettingsButton_Click" Content="Shortcut settings"/>
-        </StackPanel>
+            <Button x:Name="SettingsButton" Margin="10,0,0,0" Width="48"
+                    Padding="0" FontFamily="Segoe UI Symbol" FontSize="22"
+                    Click="SettingsButton_Click" Content="⚙"
+                    ToolTip="Settings"/>
+            <Button x:Name="FavoriteButton" Margin="10,0,0,0" Width="56"
+                    Padding="0" FontSize="26" FontFamily="Segoe UI Symbol"
+                    HorizontalContentAlignment="Center" Click="FavoriteButton_Click"
+                    ToolTip="Save or remove current translation" Content="♡"
+                    IsEnabled="False"/>
+            <Button x:Name="FavoritesButton" Margin="10,0,0,0"
+                    Click="FavoritesButton_Click" Content="Favorites (0)"/>
+        </WrapPanel>
 
         <Grid Grid.Row="2">
             <Grid.RowDefinitions>
@@ -42,11 +50,26 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="2*"/>
             </Grid.RowDefinitions>
-            <TextBlock FontWeight="SemiBold" Text="English (editable)"/>
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Width="64" Height="30" Padding="4,0"
+                        Click="CopyEnglishButton_Click" Content="Copy"/>
+                <TextBlock VerticalAlignment="Center" FontWeight="SemiBold"
+                           Text="English (editable)"/>
+            </DockPanel>
             <TextBox x:Name="RecognizedText" Grid.Row="1" Margin="0,7,0,14"
                      AcceptsReturn="True" TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto" Padding="12" FontSize="16"/>
-            <TextBlock Grid.Row="2" FontWeight="SemiBold" Text="Chinese"/>
+            <DockPanel Grid.Row="2">
+                <Button x:Name="SpeakButton" DockPanel.Dock="Right" Width="92" Height="30" Padding="4,0"
+                        Click="SpeakButton_Click" Content="Read aloud" IsEnabled="False"/>
+                <Button DockPanel.Dock="Right" Width="64" Height="30" Padding="4,0"
+                        Click="CopyChineseButton_Click" Content="Copy"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock FontWeight="SemiBold" Text="Chinese"/>
+                    <TextBlock x:Name="PhoneticText" Margin="12,0,0,0" Foreground="#52635A"
+                               FontFamily="Segoe UI" FontSize="17" VerticalAlignment="Center"/>
+                </StackPanel>
+            </DockPanel>
             <TextBox x:Name="TranslatedText" Grid.Row="3" Margin="0,7,0,0"
                      IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto" Padding="12" FontSize="17"

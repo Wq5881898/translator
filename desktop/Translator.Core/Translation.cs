@@ -2,8 +2,23 @@ namespace Translator.Core;
 
 public enum TextKind { Word, Sentence, Paragraph }
 public sealed record TranslationRequest(string RequestId, string Text, string SourceLanguage = "en", string TargetLanguage = "zh-CN");
-public sealed record TranslationResult(string RequestId, string OriginalText, string TranslatedText, TextKind TextKind, string Provider, string? Phonetic = null);
+public sealed record TranslationResult(
+    string RequestId,
+    string OriginalText,
+    string TranslatedText,
+    TextKind TextKind,
+    string Provider,
+    string? Phonetic = null,
+    IReadOnlyList<string>? PartsOfSpeech = null);
 public sealed record ProviderHealth(bool IsAvailable, string Message);
+
+public static class TranslationDisplay
+{
+    public static string Format(TranslationResult result) =>
+        result.TextKind == TextKind.Word && !string.IsNullOrWhiteSpace(result.Phonetic)
+            ? $"{result.Phonetic}{Environment.NewLine}{result.TranslatedText}"
+            : result.TranslatedText;
+}
 
 public interface ITranslationProvider
 {

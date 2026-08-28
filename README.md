@@ -2,6 +2,10 @@
 
 Translator is a lightweight, local-first browser extension for daily English learning.
 
+## Stage 2 Windows companion v1.1.6
+
+The current Stage 2 candidate adds local screenshot OCR, automatic translation, pronunciation, configurable capture shortcut, shared favorites, a Native Messaging Bridge, and a per-user Windows installer. See the [Stage 2 final user guide](docs/stage-2/STAGE2_FINAL_USER_GUIDE_ZH.md), [design](docs/stage-2/STAGE2_DESIGN_ZH.md), and [v1.1.6 test report](docs/stage-2/TEST_REPORT_V1.1.6_FINAL_ZH.md). Stage 1 remains independently usable as the browser-only build.
+
 ## Stage 1 final release candidate
 
 Core workflow:

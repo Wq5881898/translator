@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Diagnostics;
+using System.Text;
 using Translator.Core;
 
 namespace Translator.Desktop;
@@ -9,14 +11,53 @@ public partial class MainWindow : Window
     private readonly EnglishOcrProvider _ocr = new();
     private readonly GlobalHotKeyService _hotKey = new();
     private ShortcutSettings _shortcutSettings = ShortcutSettingsStore.Load();
+    private TranslationResult? _currentTranslation;
     private bool _busy;
+    private Process? _speechProcess;
+    private DateTimeOffset _lastBridgeRegistrationAttempt = DateTimeOffset.MinValue;
 
     public MainWindow()
     {
         InitializeComponent();
+        VersionText.Text = $"Version {typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "unknown"}";
         SourceInitialized += OnSourceInitialized;
+        Loaded += OnLoaded;
+        Activated += OnActivated;
         Closed += OnClosed;
         _hotKey.Pressed += OnHotKeyPressed;
+    }
+
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        EnsureBridgeRegistration(force: true);
+        await RefreshFavoriteCountAsync();
+    }
+
+    private async void OnActivated(object? sender, EventArgs e)
+    {
+        EnsureBridgeRegistration();
+        await RefreshFavoriteCountAsync();
+    }
+
+    private void EnsureBridgeRegistration(bool force = false)
+    {
+        if (!force &&
+            DateTimeOffset.UtcNow - _lastBridgeRegistrationAttempt < TimeSpan.FromSeconds(30) &&
+            BridgeRegistrationService.IsRegistered())
+        {
+            return;
+        }
+        _lastBridgeRegistrationAttempt = DateTimeOffset.UtcNow;
+        try
+        {
+            BridgeRegistrationService.EnsureRegistered();
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text =
+                $"Chrome bridge registration failed: {FriendlyError(exception)} " +
+                "Favorites remain safe locally. Reinstall Translator or retry after checking Windows security.";
+        }
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)
@@ -76,6 +117,11 @@ public partial class MainWindow : Window
     {
         _hotKey.Pressed -= OnHotKeyPressed;
         _hotKey.Dispose();
+        if (_speechProcess is { HasExited: false })
+        {
+            try { _speechProcess.Kill(entireProcessTree: true); } catch { }
+        }
+        _speechProcess?.Dispose();
     }
 
     private async void OnHotKeyPressed(object? sender, EventArgs e)
@@ -95,6 +141,7 @@ public partial class MainWindow : Window
 
     private async Task CaptureRecognizeAndTranslateAsync()
     {
+        _currentTranslation = null;
         RecognizedText.Clear();
         TranslatedText.Clear();
         SetBusy(true, "Select a region. Press Esc to cancel.");
@@ -156,51 +203,213 @@ public partial class MainWindow : Window
 
     private async Task TranslateCurrentTextAsync()
     {
-        TranslatedText.Clear();
-        if (string.IsNullOrWhiteSpace(RecognizedText.Text))
-        {
-            StatusText.Text = "There is no English text to translate.";
-            return;
-        }
-
-        StatusText.Text = "Checking the Chrome translation bridge...";
-        var health = await _translation.CheckHealthAsync(CancellationToken.None);
-        if (!health.IsAvailable)
-        {
-            StatusText.Text =
-                $"Translation could not start: {health.Message} " +
-                "Keep Chrome open, enable the Translator extension, run bridge\\install-bridge.ps1, then retry.";
-            return;
-        }
-
-        StatusText.Text =
-            "Translating locally in Chrome. First-time language-pack setup may take up to 35 seconds...";
         try
         {
+            EnsureBridgeRegistration();
+            _currentTranslation = null;
+            FavoriteButton.Content = "♡";
+            PhoneticText.Text = string.Empty;
+            SpeakButton.IsEnabled = false;
+            TranslatedText.Clear();
+            if (string.IsNullOrWhiteSpace(RecognizedText.Text))
+            {
+                StatusText.Text = "There is no English text to translate.";
+                return;
+            }
+
+            StatusText.Text = "Checking the Chrome translation bridge...";
+            var health = await _translation.CheckHealthAsync(CancellationToken.None);
+            if (!health.IsAvailable)
+            {
+                StatusText.Text =
+                    $"Translation could not start: {health.Message} " +
+                    "Keep Chrome open, enable the Translator extension, then retry.";
+                return;
+            }
+
+            StatusText.Text =
+                "Connecting to Chrome, checking the dictionary, and translating locally...";
             var result = await _translation.TranslateAsync(
                 new TranslationRequest(Guid.NewGuid().ToString("N"), RecognizedText.Text),
                 CancellationToken.None);
+            PhoneticText.Text = result.TextKind == TextKind.Word && !string.IsNullOrWhiteSpace(result.Phonetic)
+                ? result.Phonetic
+                : string.Empty;
             TranslatedText.Text = result.TranslatedText;
-            StatusText.Text = "Translation complete.";
+            _currentTranslation = result;
+            SpeakButton.IsEnabled = true;
+            await RefreshFavoriteButtonAsync();
+            StatusText.Text = result.Provider == "chrome-local-dictionary-fallback"
+                ? "Basic translation complete. The dictionary was unavailable, so phonetics and extended meanings may be missing."
+                : "Translation complete.";
         }
         catch (Exception exception)
         {
+            DesktopErrorLog.Write("Translation operation failed", exception);
             StatusText.Text = $"Translation failed: {FriendlyError(exception)}";
         }
     }
 
-    private void CopyButton_Click(object sender, RoutedEventArgs e)
+    internal void ReportUnexpectedError(Exception exception)
     {
-        if (string.IsNullOrWhiteSpace(TranslatedText.Text))
+        DesktopErrorLog.Write("Recovered dispatcher exception", exception);
+        RestoreWindow();
+        SetBusy(false);
+        StatusText.Text =
+            $"Translator recovered from an unexpected error: {FriendlyError(exception)} Please retry.";
+    }
+
+    private async void FavoriteButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentTranslation is null) return;
+        try
         {
-            StatusText.Text = "There is no Chinese translation to copy.";
+            var favorites = (await SharedFavoriteStore.LoadAsync()).ToList();
+            var kind = _currentTranslation.TextKind == TextKind.Word ? "word" : "sentence";
+            var normalized = TextRules.Normalize(_currentTranslation.OriginalText);
+            var id = $"{kind}:{(kind == "word" ? normalized.ToLowerInvariant() : normalized)}";
+            var existing = favorites.FindIndex(item => item.Id == id);
+            if (existing >= 0)
+            {
+                await SharedFavoriteStore.PatchAsync([], [id]);
+                StatusText.Text = "Removed from favorites.";
+            }
+            else
+            {
+                var item = new FavoriteEntry(
+                    id,
+                    kind,
+                    normalized,
+                    _currentTranslation.TranslatedText,
+                    DateTimeOffset.UtcNow.ToString("O"),
+                    _currentTranslation.Phonetic);
+                await SharedFavoriteStore.PatchAsync([item], []);
+                StatusText.Text = "Saved to the shared local favorites.";
+            }
+            await RefreshFavoriteButtonAsync();
+            await RefreshFavoriteCountAsync();
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text = $"Favorite update failed: {FriendlyError(exception)}";
+        }
+    }
+
+    private async void FavoritesButton_Click(object sender, RoutedEventArgs e)
+    {
+        var window = new FavoritesWindow { Owner = this };
+        window.ShowDialog();
+        await RefreshFavoriteButtonAsync();
+        await RefreshFavoriteCountAsync();
+    }
+
+    private async Task RefreshFavoriteButtonAsync()
+    {
+        if (_currentTranslation is null)
+        {
+            FavoriteButton.Content = "♡";
+            return;
+        }
+        var kind = _currentTranslation.TextKind == TextKind.Word ? "word" : "sentence";
+        var normalized = TextRules.Normalize(_currentTranslation.OriginalText);
+        var id = $"{kind}:{(kind == "word" ? normalized.ToLowerInvariant() : normalized)}";
+        var favorites = await SharedFavoriteStore.LoadAsync();
+        var saved = favorites.Any(item => item.Id == id);
+        FavoriteButton.Content = saved ? "♥" : "♡";
+        FavoriteButton.Foreground = saved
+            ? System.Windows.Media.Brushes.Crimson
+            : System.Windows.Media.Brushes.Black;
+    }
+
+    private async Task RefreshFavoriteCountAsync()
+    {
+        try
+        {
+            var favorites = await SharedFavoriteStore.LoadAsync();
+            FavoritesButton.Content = $"Favorites ({favorites.Count})";
+        }
+        catch
+        {
+            FavoritesButton.Content = "Favorites (?)";
+        }
+    }
+
+    private void CopyEnglishButton_Click(object sender, RoutedEventArgs e)
+    {
+        CopyText(RecognizedText.Text, "English text");
+    }
+
+    private void CopyChineseButton_Click(object sender, RoutedEventArgs e)
+    {
+        CopyText(TranslatedText.Text, "Chinese translation");
+    }
+
+    private void SpeakButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentTranslation is null || string.IsNullOrWhiteSpace(_currentTranslation.OriginalText))
+        {
+            StatusText.Text = "There is no English text to read aloud.";
+            return;
+        }
+        try
+        {
+            if (_speechProcess is { HasExited: false })
+            {
+                _speechProcess.Kill(entireProcessTree: true);
+                SpeakButton.Content = "Read aloud";
+                StatusText.Text = "Reading stopped.";
+                return;
+            }
+            var encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes(_currentTranslation.OriginalText));
+            var script = "$t=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encoded + "')); " +
+                         "Add-Type -AssemblyName System.Speech; $s=New-Object System.Speech.Synthesis.SpeechSynthesizer; " +
+                         "$s.SelectVoiceByHints([System.Speech.Synthesis.VoiceGender]::NotSet, [System.Speech.Synthesis.VoiceAge]::NotSet, 0, [Globalization.CultureInfo]::GetCultureInfo('en-US')); $s.Speak($t)";
+            _speechProcess = Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"{script}\"",
+                CreateNoWindow = true,
+                UseShellExecute = false,
+            });
+            SpeakButton.Content = "Stop reading";
+            StatusText.Text = "Reading English aloud locally...";
+            _ = WatchSpeechAsync(_speechProcess);
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text = $"Read aloud failed: {FriendlyError(exception)}";
+        }
+    }
+
+    private async Task WatchSpeechAsync(Process? process)
+    {
+        if (process is null) return;
+        try { await process.WaitForExitAsync(); } catch { return; }
+        if (!Dispatcher.HasShutdownStarted)
+        {
+            await Dispatcher.InvokeAsync(() =>
+            {
+                SpeakButton.Content = "Read aloud";
+                if (StatusText.Text.StartsWith("Reading English", StringComparison.Ordinal))
+                    StatusText.Text = "Reading complete.";
+            });
+        }
+        process.Dispose();
+        _speechProcess = null;
+    }
+
+    private void CopyText(string value, string description)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            StatusText.Text = $"There is no {description.ToLowerInvariant()} to copy.";
             return;
         }
 
         try
         {
-            System.Windows.Clipboard.SetText(TranslatedText.Text);
-            StatusText.Text = "Chinese translation copied.";
+            System.Windows.Clipboard.SetText(value);
+            StatusText.Text = $"{description} copied.";
         }
         catch (Exception exception)
         {
@@ -226,8 +435,10 @@ public partial class MainWindow : Window
         _busy = busy;
         CaptureButton.IsEnabled = !busy;
         TranslateButton.IsEnabled = !busy;
-        CopyButton.IsEnabled = !busy;
         SettingsButton.IsEnabled = !busy;
+        FavoriteButton.IsEnabled = !busy && _currentTranslation is not null;
+        SpeakButton.IsEnabled = !busy && _currentTranslation is not null;
+        FavoritesButton.IsEnabled = !busy;
         if (status is not null)
         {
             StatusText.Text = status;

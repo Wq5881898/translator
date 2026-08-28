@@ -63,6 +63,14 @@ public sealed class BrowserBridgeTranslationProvider : ITranslationProvider
                 payload.GetProperty("provider").GetString() ?? Id,
                 payload.TryGetProperty("phonetic", out var phonetic)
                     ? phonetic.GetString()
+                    : null,
+                payload.TryGetProperty("partsOfSpeech", out var partsOfSpeech) &&
+                    partsOfSpeech.ValueKind == JsonValueKind.Array
+                    ? partsOfSpeech.EnumerateArray()
+                        .Select(item => item.GetString())
+                        .Where(item => !string.IsNullOrWhiteSpace(item))
+                        .Cast<string>()
+                        .ToArray()
                     : null);
         }
         catch (TimeoutException)

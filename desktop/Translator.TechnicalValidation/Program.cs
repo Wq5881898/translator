@@ -73,6 +73,8 @@ if (args is ["--bridge-translate", var text])
 var checks = new (string Name, Func<Task> Run)[]
 {
     ("text rules", ValidateTextRulesAsync),
+    ("translation display", ValidateTranslationDisplayAsync),
+    ("shared favorites contract", ValidateSharedFavoritesAsync),
     ("mock provider", ValidateMockAsync),
     ("native frame UTF-8 round-trip", ValidateFramingAsync),
     ("invalid native frame rejection", ValidateInvalidLengthAsync),
@@ -128,6 +130,53 @@ static Task ValidateTextRulesAsync()
         "Detached possessive markers were not repaired.");
     return Task.CompletedTask;
 }
+
+static Task ValidateSharedFavoritesAsync()
+{
+    var favorite = new FavoriteEntry(
+        "word:hello",
+        "word",
+        "Hello",
+        "你好",
+        "2026-07-30T00:00:00.000Z",
+        "/həˈləʊ/");
+    Assert(SharedFavoriteStore.IsValid(favorite), "A valid favorite was rejected.");
+    var csv = FavoritesCsv.Serialize([favorite]);
+    Assert(csv.Contains("2026-07-30") && !csv.Contains("2026-07-30T"),
+        "Favorites CSV must export First saved as YYYY-MM-DD.");
+    var parsed = FavoritesCsv.Parse(csv);
+    Assert(
+        parsed.Count == 1 &&
+        parsed[0] == favorite with { FirstFavoritedAt = "2026-07-30" },
+        "Favorites CSV did not round-trip.");
+    return Task.CompletedTask;
+}
+
+static Task ValidateTranslationDisplayAsync()
+{
+    var word = new TranslationResult(
+        "word-result",
+        "granted",
+        "授予；批准",
+        TextKind.Word,
+        "chrome-local-bridge",
+        "/ˈɡrɑːntɪd/");
+    Assert(
+        TranslationDisplay.Format(word) ==
+        $"/ˈɡrɑːntɪd/{Environment.NewLine}授予；批准",
+        "A word result must display its phonetic before the Chinese translation.");
+
+    var sentence = word with
+    {
+        OriginalText = "Permission was granted.",
+        TextKind = TextKind.Sentence,
+    };
+    Assert(
+        TranslationDisplay.Format(sentence) == "授予；批准",
+        "Sentence results must not prepend a word phonetic.");
+    return Task.CompletedTask;
+}
+
 static async Task ValidateMockAsync()
 {
     var provider = new MockTranslationProvider();
@@ -138,12 +187,14 @@ static async Task ValidateMockAsync()
 static async Task ValidateFramingAsync()
 {
     var expected = new BridgeEnvelope(BridgeEnvelope.CurrentVersion, "bridge.health", "r2", DateTimeOffset.UtcNow,
-        JsonSerializer.SerializeToElement(new { text = "Hello 世界" }));
+        JsonSerializer.SerializeToElement(new { text = "Hello 世界", phonetic = "/ˌkɒnsəlˈteɪʃən/" }));
     await using var stream = new MemoryStream();
     await NativeMessageFraming.WriteAsync(stream, expected, CancellationToken.None);
     stream.Position = 0;
     var actual = await NativeMessageFraming.ReadAsync(stream, CancellationToken.None);
     Assert(actual?.Payload.GetProperty("text").GetString() == "Hello 世界", "UTF-8 payload failed.");
+    Assert(actual?.Payload.GetProperty("phonetic").GetString() == "/ˌkɒnsəlˈteɪʃən/",
+        "IPA payload was corrupted during the UTF-8 bridge round-trip.");
 }
 static async Task ValidateInvalidLengthAsync()
 {
@@ -154,6 +205,12 @@ static async Task ValidateInvalidLengthAsync()
 }
 static async Task ValidateNativeHostRelayAsync()
 {
+    var previousPipeName = Environment.GetEnvironmentVariable(
+        BridgeEnvelope.PipeNameEnvironmentVariable);
+    var isolatedPipeName = $"{BridgeEnvelope.DefaultPipeName}.validation.{Guid.NewGuid():N}";
+    Environment.SetEnvironmentVariable(
+        BridgeEnvelope.PipeNameEnvironmentVariable,
+        isolatedPipeName);
     var desktopRoot = Path.GetFullPath(Path.Combine(
         AppContext.BaseDirectory,
         "..",
@@ -168,16 +225,31 @@ static async Task ValidateNativeHostRelayAsync()
         "net10.0-windows10.0.19041.0",
         "Translator.BridgeHost.exe");
     Assert(File.Exists(hostPath), $"Bridge Host was not built: {hostPath}");
-    using var process = Process.Start(new ProcessStartInfo(hostPath)
-    {
-        RedirectStandardInput = true,
-        RedirectStandardOutput = true,
-        RedirectStandardError = true,
-        UseShellExecute = false,
-        CreateNoWindow = true,
-    }) ?? throw new InvalidOperationException("Bridge Host could not be started.");
+    using var process = Process.Start(CreateBridgeHostStartInfo(hostPath, isolatedPipeName))
+        ?? throw new InvalidOperationException("Bridge Host could not be started.");
     try
     {
+        using var favoritesProcess = Process.Start(
+            CreateBridgeHostStartInfo(hostPath, isolatedPipeName))
+            ?? throw new InvalidOperationException("Concurrent favorites Bridge Host could not be started.");
+        var favoritesRequest = BridgeEnvelope.Create(
+            "favorites.read",
+            "concurrent-favorites-read",
+            new { });
+        await NativeMessageFraming.WriteAsync(
+            favoritesProcess.StandardInput.BaseStream,
+            favoritesRequest,
+            CancellationToken.None);
+        var favoritesResponse = await NativeMessageFraming.ReadAsync(
+            favoritesProcess.StandardOutput.BaseStream,
+            CancellationToken.None)
+            ?? throw new InvalidOperationException("Concurrent favorites Bridge Host returned no response.");
+        Assert(
+            favoritesResponse.MessageType == "favorites.result",
+            "Concurrent favorites request failed while the translation host was active.");
+        favoritesProcess.StandardInput.Close();
+        await favoritesProcess.WaitForExitAsync();
+
         var provider = new BrowserBridgeTranslationProvider();
         var translationTask = provider.TranslateAsync(
             new TranslationRequest("relay-test", "Hello world."),
@@ -215,7 +287,24 @@ static async Task ValidateNativeHostRelayAsync()
             process.Kill(entireProcessTree: true);
             await process.WaitForExitAsync();
         }
+        Environment.SetEnvironmentVariable(
+            BridgeEnvelope.PipeNameEnvironmentVariable,
+            previousPipeName);
     }
+}
+
+static ProcessStartInfo CreateBridgeHostStartInfo(string hostPath, string pipeName)
+{
+    var startInfo = new ProcessStartInfo(hostPath)
+    {
+        RedirectStandardInput = true,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        UseShellExecute = false,
+        CreateNoWindow = true,
+    };
+    startInfo.Environment[BridgeEnvelope.PipeNameEnvironmentVariable] = pipeName;
+    return startInfo;
 }
 static Task ValidateGlobalShortcutContractAsync()
 {
