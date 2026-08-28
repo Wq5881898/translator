@@ -112,11 +112,13 @@ jobs:
           $manifestPath = $key.GetValue('')
           if (-not $manifestPath) { throw 'Chrome native host registry value is missing.' }
       - uses: actions/upload-artifact@v4
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         with:
           name: translator-stage2-batch-e
           path: staging
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         with:
           name: translator-stage2-installer
           path: installer-output/Translator-Setup-v1.1.8.exe
